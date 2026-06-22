@@ -942,12 +942,36 @@ function sleepCheck(ms) {
   });
 }
 
+function driveChips(el, items, getSel, onSel) {
+  // chips()と同じだが、renderSetup()を呼ばず代わりにrenderDriveSetup()を呼ぶ
+  el.innerHTML = "";
+  items.forEach((it, i) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (getSel(it, i) ? " sel" : "");
+    b.innerHTML = (it.label || it) + (it.tag ? `<small>${it.tag}</small>` : "");
+    b.onclick = () => { onSel(it, i); renderDriveSetup(); };
+    el.appendChild(b);
+  });
+}
+function renderDriveSetup() {
+  driveChips($("driveSrcChips"), DRIVE_SRC,
+    it => driveCfg.src === it.id,
+    it => { driveCfg.src = it.id; store.set("is_drive", driveCfg); });
+  driveChips($("driveTimerChips"), DRIVE_TIMERS,
+    it => driveCfg.timer === it.s,
+    it => { driveCfg.timer = it.s; store.set("is_drive", driveCfg); });
+  if (SR) {
+    driveChips($("driveVoiceChips"), DRIVE_VOICE,
+      it => driveCfg.voice === it.id,
+      it => { driveCfg.voice = it.id; store.set("is_drive", driveCfg); });
+  } else {
+    $("driveVoiceChips").innerHTML = '<span class="note" style="font-size:.8rem;color:var(--paper-dim)">この端末は音声認識に未対応のためOFFになります</span>';
+    driveCfg.voice = false;
+  }
+}
 $("btnDrive").onclick = () => {
-  loadVoices();
-  chips($("driveSrcChips"), DRIVE_SRC, it => driveCfg.src === it.id, it => { driveCfg.src = it.id; store.set("is_drive", driveCfg); $("btnDrive").click(); });
-  chips($("driveTimerChips"), DRIVE_TIMERS, it => driveCfg.timer === it.s, it => { driveCfg.timer = it.s; store.set("is_drive", driveCfg); $("btnDrive").click(); });
-  chips($("driveVoiceChips"), DRIVE_VOICE, it => driveCfg.voice === it.id, it => { driveCfg.voice = it.id; store.set("is_drive", driveCfg); $("btnDrive").click(); });
-  if (!SR) { driveCfg.voice = false; $("driveVoiceChips").innerHTML = '<span class="note">この端末は音声認識に未対応のためOFFになります</span>'; }
+  try { voicesCache = speechSynthesis.getVoices(); } catch {}
+  renderDriveSetup();
   show("scrDriveSetup");
 };
 $("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
@@ -965,7 +989,7 @@ $("btnDriveStart").onclick = async () => {
   driveLog = [];
   driveOn = true;
   drivePaused = false;
-  loadVoices();
+  try { voicesCache = speechSynthesis.getVoices(); } catch {}
   // 画面スリープ防止
   try { wakeLockRef = await navigator.wakeLock.request("screen"); } catch {}
   // iOS/Chromeの読み上げ停止バグ対策
