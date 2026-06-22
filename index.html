@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>InstantSpeak — 瞬間英作文ドリル</title>
+<style>
+:root {
+  --ink: #131929;
+  --ink-2: #1c2438;
+  --ink-3: #283454;
+  --lamp: #f0a868;
+  --lamp-dim: #b97f4e;
+  --paper: #f2ecdf;
+  --paper-dim: #b8b2a4;
+  --good: #7fc8a9;
+  --soso: #e8c468;
+  --bad: #e08080;
+  --radius: 14px;
+  --jp-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  --ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body {
+  font-family: var(--ui);
+  background: var(--ink);
+  color: var(--paper);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.app { max-width: 480px; margin: 0 auto; padding: 20px 18px 40px; }
+
+/* ---------- header ---------- */
+.head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
+.head h1 { font-family: var(--jp-serif); font-size: 1.15rem; font-weight: 600; letter-spacing: .12em; }
+.head h1 span { color: var(--lamp); }
+.head .streak { font-size: .78rem; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
+
+/* ---------- screens ---------- */
+.screen { display: none; }
+.screen.on { display: block; animation: fadein .25s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- setup ---------- */
+.label { font-size: .78rem; letter-spacing: .08em; color: var(--paper-dim); margin: 18px 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--ink-3); background: var(--ink-2); color: var(--paper);
+  border-radius: 999px; padding: 9px 15px; font-size: .88rem; cursor: pointer;
+  transition: border-color .15s, background .15s; font-family: var(--ui);
+}
+.chip.sel { border-color: var(--lamp); background: rgba(240,168,104,.13); color: var(--lamp); }
+.chip small { font-size: .68rem; opacity: .75; margin-left: 3px; }
+input[type=text], input[type=password], textarea {
+  width: 100%; background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
+  color: var(--paper); padding: 13px 14px; font-size: 16px; font-family: var(--ui);
+}
+textarea { min-height: 110px; resize: vertical; }
+input:focus, textarea:focus { outline: none; border-color: var(--lamp-dim); }
+.btn {
+  display: block; width: 100%; border: none; border-radius: var(--radius);
+  padding: 16px; font-size: 1.02rem; font-weight: 600; cursor: pointer;
+  font-family: var(--ui); transition: transform .08s, opacity .15s;
+}
+.btn:active { transform: scale(.985); }
+.btn-main { background: var(--lamp); color: var(--ink); margin-top: 26px; }
+.btn-sub { background: var(--ink-2); color: var(--paper); border: 1px solid var(--ink-3); margin-top: 10px; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+.note { font-size: .75rem; color: var(--paper-dim); margin-top: 8px; line-height: 1.6; }
+.lastscore { margin-top: 22px; padding: 14px 16px; background: var(--ink-2); border-radius: var(--radius); font-size: .85rem; color: var(--paper-dim); display: none; }
+.lastscore b { color: var(--good); font-size: 1.05rem; }
+details.keybox { margin-top: 24px; }
+details.keybox summary { font-size: .78rem; color: var(--paper-dim); cursor: pointer; list-style: none; }
+details.keybox summary::before { content: "▸ "; }
+details.keybox[open] summary::before { content: "▾ "; }
+details.keybox > div { margin-top: 10px; }
+#claudeBox { display: none; margin-top: 14px; }
+
+/* ---------- drill card ---------- */
+.progress { display: flex; gap: 5px; margin-bottom: 26px; }
+.progress i { flex: 1; height: 3px; border-radius: 2px; background: var(--ink-3); }
+.progress i.done-good { background: var(--good); }
+.progress i.done-soso { background: var(--soso); }
+.progress i.done-bad { background: var(--bad); }
+.progress i.now { background: var(--lamp); }
+
+.card {
+  background: var(--ink-2); border-radius: 20px; padding: 34px 24px 28px;
+  text-align: center; position: relative; overflow: hidden;
+  border: 1px solid var(--ink-3);
+}
+.card .jp {
+  font-family: var(--jp-serif); font-size: 1.45rem; line-height: 1.85; font-weight: 600;
+  min-height: 5.4em; display: flex; align-items: center; justify-content: center;
+}
+.ring-wrap { display: flex; justify-content: center; margin-top: 18px; height: 64px; }
+.ring { transform: rotate(-90deg); }
+.ring .bg { stroke: var(--ink-3); }
+.ring .fg { stroke: var(--lamp); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.ring-num {
+  position: absolute; font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 700;
+  width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; color: var(--lamp);
+}
+.speak-hint { font-size: .78rem; color: var(--paper-dim); margin-top: 12px; letter-spacing: .06em; }
+
+.answer { margin-top: 18px; display: none; }
+.answer.on { display: block; animation: fadein .25s ease; }
+.answer .en {
+  font-size: 1.3rem; font-weight: 700; line-height: 1.55; color: var(--lamp);
+  background: var(--ink-2); border: 1px solid var(--lamp-dim); border-radius: var(--radius);
+  padding: 18px 16px;
+}
+.answer .tip { font-size: .83rem; color: var(--paper-dim); line-height: 1.7; margin-top: 10px; padding: 0 4px; text-align: left; }
+.grade { display: flex; gap: 8px; margin-top: 18px; }
+.grade button {
+  flex: 1; border: none; border-radius: var(--radius); padding: 15px 4px;
+  font-size: .92rem; font-weight: 700; cursor: pointer; font-family: var(--ui);
+  transition: transform .08s;
+}
+.grade button:active { transform: scale(.96); }
+.grade .g-good { background: rgba(127,200,169,.16); color: var(--good); border: 1px solid var(--good); }
+.grade .g-soso { background: rgba(232,196,104,.13); color: var(--soso); border: 1px solid var(--soso); }
+.grade .g-bad  { background: rgba(224,128,128,.13); color: var(--bad); border: 1px solid var(--bad); }
+.grade button small { display: block; font-size: .68rem; font-weight: 500; margin-top: 3px; opacity: .8; }
+
+/* ---------- results ---------- */
+.score-big { text-align: center; margin: 30px 0 6px; }
+.score-big .num { font-size: 3.2rem; font-weight: 800; color: var(--lamp); font-variant-numeric: tabular-nums; }
+.score-big .den { font-size: 1.2rem; color: var(--paper-dim); }
+.score-sub { text-align: center; font-size: .85rem; color: var(--paper-dim); margin-bottom: 6px; }
+.trend { text-align: center; font-size: .82rem; margin-bottom: 24px; min-height: 1.2em; }
+.trend .up { color: var(--good); }
+.trend .down { color: var(--paper-dim); }
+.weak-list { margin-top: 8px; }
+.weak-item {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
+  padding: 13px 14px; margin-bottom: 9px;
+}
+.weak-item .wjp { font-family: var(--jp-serif); font-size: .95rem; margin-bottom: 5px; }
+.weak-item .wen { font-size: .95rem; color: var(--lamp); font-weight: 600; }
+.weak-item .mark { float: right; font-size: .8rem; }
+.empty-weak { text-align: center; color: var(--good); font-size: .95rem; padding: 18px 0; }
+
+/* ---------- loading ---------- */
+.loading { text-align: center; padding: 70px 0; }
+.loading .dots { font-family: var(--jp-serif); font-size: 1.05rem; letter-spacing: .1em; }
+.loading .dots::after { content: "…"; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.errbox { background: rgba(224,128,128,.12); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 16px; display: none; line-height: 1.6; }
+
+/* ---------- drive mode ---------- */
+.drive-card {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 20px;
+  padding: 40px 24px; text-align: center; min-height: 40vh;
+  display: flex; flex-direction: column; justify-content: center; gap: 18px;
+}
+.drive-card .djp-big { font-family: var(--jp-serif); font-size: 1.5rem; line-height: 1.8; font-weight: 600; }
+.drive-card .den-big { font-size: 1.35rem; font-weight: 700; color: var(--lamp); line-height: 1.5; min-height: 2em; }
+.drive-card .dphase { font-size: .8rem; color: var(--paper-dim); letter-spacing: .1em; }
+.btn-huge { padding: 22px; font-size: 1.15rem; border-radius: 18px; }
+.btn-drive { background: rgba(127,200,169,.16); color: var(--good); border: 1px solid var(--good); }
+.dgrade-mark { font-size: 1rem; min-width: 2em; text-align: center; display: inline-block; }
+.log-item {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
+  padding: 12px 14px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+}
+.log-item:active { border-color: var(--lamp-dim); }
+.log-item .ltexts { flex: 1; }
+.log-item .ljp { font-family: var(--jp-serif); font-size: .9rem; margin-bottom: 3px; }
+.log-item .len { font-size: .85rem; color: var(--lamp); }
+.log-item .lmark { font-size: 1.3rem; width: 1.6em; text-align: center; flex-shrink: 0; }
+
+/* ---------- deck editor ---------- */
+.deck-item {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
+  padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
+}
+.deck-item:active { border-color: var(--lamp-dim); }
+.deck-item .djp { font-family: var(--jp-serif); font-size: .92rem; margin-bottom: 4px; }
+.deck-item .den { font-size: .88rem; color: var(--lamp); }
+.deck-item .dtag { float: right; font-size: .68rem; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 6px; padding: 2px 6px; }
+.deck-count { font-size: .75rem; color: var(--paper-dim); margin: 6px 2px 10px; }
+.weak-item .wedit {
+  float: right; background: none; border: 1px solid var(--ink-3); color: var(--paper-dim);
+  border-radius: 8px; padding: 4px 10px; font-size: .8rem; cursor: pointer; margin-left: 8px;
+}
+.modal-bg {
+  display: none; position: fixed; inset: 0; background: rgba(10,14,25,.78);
+  z-index: 50; padding: 24px 18px; overflow-y: auto;
+}
+.modal-bg.on { display: block; }
+.modal {
+  max-width: 480px; margin: 30px auto; background: var(--ink-2);
+  border: 1px solid var(--ink-3); border-radius: 20px; padding: 22px 18px;
+  animation: fadein .2s ease;
+}
+.modal .label:first-child { margin-top: 0; }
+.modal .btn-danger { background: rgba(224,128,128,.13); color: var(--bad); border: 1px solid var(--bad); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="head">
+    <h1>Instant<span>Speak</span></h1>
+    <div class="streak" id="histBadge"></div>
+  </div>
+
+  <!-- ======== SETUP ======== -->
+  <div class="screen on" id="scrSetup">
+    <div class="label">出題ソース</div>
+    <div class="chips" id="srcChips"></div>
+
+    <div class="label">シーン</div>
+    <div class="chips" id="sceneChips"></div>
+    <input type="text" id="customScene" placeholder="自由入力(例: 海外の獣医に症例を説明)" style="margin-top:10px">
+    <div class="note" id="customNote" style="display:none">自由入力シーンは「Claudeアプリ」か「API」で生成できます</div>
+
+    <div class="label">レベル</div>
+    <div class="chips" id="levelChips"></div>
+
+    <div class="label">考える時間</div>
+    <div class="chips" id="timerChips"></div>
+
+    <button class="btn btn-main" id="btnStart">10問ドリルを開始</button>
+    <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:10px">🚗 ドライブモード(音声のみ)</button>
+
+    <!-- Claudeアプリ生成モード -->
+    <div id="claudeBox">
+      <button class="btn btn-sub" id="btnCopyPrompt" style="margin-top:0">① プロンプトをコピー → Claudeに貼る</button>
+      <div class="label">② Claudeの返答(JSON)をここに貼り付け</div>
+      <textarea id="pasteJson" placeholder='{"sentences":[...]}'></textarea>
+      <button class="btn btn-main" id="btnImport" style="margin-top:12px">③ 取り込んで開始</button>
+    </div>
+
+    <button class="btn btn-sub" id="btnWeak" style="display:none">弱点デッキだけ復習 (<span id="weakCount">0</span>問)</button>
+    <button class="btn btn-sub" id="btnDeck">問題集を見る・編集する</button>
+
+    <div class="lastscore" id="lastScore"></div>
+    <div class="errbox" id="errSetup"></div>
+
+    <details class="keybox" id="keyBox">
+      <summary>API設定(APIモード利用時のみ)</summary>
+      <div>
+        <input type="password" id="apiKey" placeholder="Anthropic APIキー (sk-ant-...)">
+        <div class="note">キーはこの端末のlocalStorageのみに保存。1回の生成で約3〜4円。</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ======== LOADING ======== -->
+  <div class="screen" id="scrLoading">
+    <div class="loading"><div class="dots">問題を作成中</div></div>
+  </div>
+
+  <!-- ======== DRILL ======== -->
+  <div class="screen" id="scrDrill">
+    <div class="progress" id="progBar"></div>
+    <div class="card">
+      <div class="jp" id="qJp"></div>
+      <div class="ring-wrap" id="ringWrap" style="position:relative">
+        <svg class="ring" width="64" height="64" viewBox="0 0 64 64">
+          <circle class="bg" cx="32" cy="32" r="27" fill="none" stroke-width="4"/>
+          <circle class="fg" id="ringFg" cx="32" cy="32" r="27" fill="none" stroke-width="4"/>
+        </svg>
+        <div class="ring-num" id="ringNum"></div>
+      </div>
+      <div class="speak-hint" id="speakHint">声に出して英語で言ってみる</div>
+    </div>
+
+    <button class="btn btn-sub" id="btnReveal" style="margin-top:14px">答えを見る</button>
+
+    <div class="answer" id="ansBox">
+      <div class="en" id="aEn"></div>
+      <div class="tip" id="aTip"></div>
+      <div class="grade">
+        <button class="g-good" data-g="good">◎ 言えた<small>ほぼ同じ形で</small></button>
+        <button class="g-soso" data-g="soso">△ 惜しい<small>部分的に出た</small></button>
+        <button class="g-bad" data-g="bad">✗ 出てこない<small>詰まった</small></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== RESULTS ======== -->
+  <div class="screen" id="scrResult">
+    <div class="score-big"><span class="num" id="rNum">0</span><span class="den"> / <span id="rDen">10</span></span></div>
+    <div class="score-sub">瞬間に言えた文</div>
+    <div class="trend" id="rTrend"></div>
+
+    <div class="label">今回の弱点 → Ankiへ</div>
+    <div class="weak-list" id="weakList"></div>
+
+    <button class="btn btn-main" id="btnCsv">AnkiカードCSVをコピー</button>
+    <button class="btn btn-sub" id="btnCsvDl">CSVファイルで保存</button>
+    <button class="btn btn-sub" id="btnRetry">✗△だけもう一周</button>
+    <button class="btn btn-sub" id="btnHome">ホームへ</button>
+    <div class="errbox" id="errResult"></div>
+  <!-- ======== DRIVE SETUP ======== -->
+  <div class="screen" id="scrDriveSetup">
+    <div class="label">音声で流す問題</div>
+    <div class="chips" id="driveSrcChips"></div>
+    <div class="label">考える時間(日本語のあと)</div>
+    <div class="chips" id="driveTimerChips"></div>
+    <div class="label">声で評価をつける</div>
+    <div class="chips" id="driveVoiceChips"></div>
+    <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
+    <div class="note">運転前にスタートしてください。止めるまでシャッフルでエンドレスに流れます。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
+    <button class="btn btn-main btn-huge" id="btnDriveStart">▶ 再生開始</button>
+    <button class="btn btn-sub" id="btnDriveBack">ホームへ</button>
+    <div class="errbox" id="errDrive"></div>
+  </div>
+
+  <!-- ======== DRIVE PLAYING ======== -->
+  <div class="screen" id="scrDrive">
+    <div class="drive-card">
+      <div class="dphase" id="dPhase"></div>
+      <div class="djp-big" id="dJp"></div>
+      <div class="den-big" id="dEn"></div>
+    </div>
+    <button class="btn btn-huge btn-sub" id="btnDrivePause" style="margin-top:16px">⏸ 一時停止</button>
+    <button class="btn btn-huge btn-sub" id="btnDriveStop">■ 終了</button>
+  </div>
+
+  <!-- ======== DRIVE LOG (降車後のまとめ評価) ======== -->
+  <div class="screen" id="scrDriveLog">
+    <div class="label">今回流れた文 — タップで評価を切替 (− → ◎ → △ → ✗)</div>
+    <div id="driveLogList"></div>
+    <button class="btn btn-main" id="btnLogSave">保存してホームへ (✗△は弱点デッキへ)</button>
+    <button class="btn btn-sub" id="btnLogSkip">評価せずホームへ</button>
+  </div>
+
+  <!-- ======== DECK EDITOR ======== -->
+  <div class="screen" id="scrDeck">
+    <div class="label">シーン</div>
+    <div class="chips" id="deckSceneChips"></div>
+    <div class="deck-count" id="deckCount"></div>
+    <div id="deckList"></div>
+    <button class="btn btn-main" id="btnAddSent">＋ このシーンに例文を追加</button>
+    <button class="btn btn-sub" id="btnDeckHome">ホームへ</button>
+  </div>
+
+  <!-- ======== EDIT MODAL ======== -->
+  <div class="modal-bg" id="editModalBg">
+    <div class="modal">
+      <div class="label">日本語</div>
+      <textarea id="edJp" style="min-height:64px"></textarea>
+      <div class="label">英語</div>
+      <textarea id="edEn" style="min-height:64px"></textarea>
+      <div class="label">メモ(つまずきポイント)</div>
+      <input type="text" id="edNote">
+      <button class="btn btn-main" id="edSave">保存</button>
+      <button class="btn btn-sub btn-danger" id="edDelete">この例文を削除</button>
+      <button class="btn btn-sub" id="edCancel">キャンセル</button>
+    </div>
+  </div>
+
+</div>
+<script>
+/* ================= 内蔵問題集 (0円・オフラインOK) =================
+   lv: s=短文 m=普通 l=長め */
+const BANK = [
+/* --- 0: 仕事の報告・相談 --- */
+{s:0,lv:"s",jp:"今日の報告をしてもいいですか。",en:"Can I give you today's update?",note:"報告=update。reportより会話で自然"},
+{s:0,lv:"s",jp:"その件はもう終わりました。",en:"I've already finished that.",note:"完了は現在完了で"},
+{s:0,lv:"s",jp:"少し相談したいことがあります。",en:"I need your advice on something.",note:"相談する=ask for / need advice"},
+{s:0,lv:"s",jp:"締め切りに間に合いそうにありません。",en:"I don't think I'll make the deadline.",note:"否定はI don't think側に置く"},
+{s:0,lv:"s",jp:"進捗は順調です。",en:"Everything is on track.",note:"順調=on track"},
+{s:0,lv:"m",jp:"例の件、先方から返事はありましたか。",en:"Have you heard back from them about that?",note:"返事がある=hear back from"},
+{s:0,lv:"m",jp:"明日までに資料をまとめておきます。",en:"I'll have the documents ready by tomorrow.",note:"have+物+ready の形"},
+{s:0,lv:"m",jp:"この問題は私の手に負えません。",en:"This is beyond what I can handle.",note:"手に負えない=beyond"},
+{s:0,lv:"m",jp:"会議の時間を変更してもらえると助かります。",en:"It would help if we could move the meeting.",note:"時間変更=move"},
+{s:0,lv:"m",jp:"結果が出たらすぐ共有します。",en:"I'll share the results as soon as they're in.",note:"結果が出る=be in"},
+{s:0,lv:"l",jp:"トラブルがあったので、対応に少し時間がかかりそうです。",en:"We ran into a problem, so it might take a little longer to sort out.",note:"run into / sort out"},
+{s:0,lv:"l",jp:"私の理解が正しければ、これは来週まで待ったほうがいいと思います。",en:"If I understand correctly, I think we should hold off on this until next week.",note:"保留する=hold off on"},
+{s:0,lv:"l",jp:"念のため確認ですが、この件は私が担当するということでいいですか。",en:"Just to confirm, am I the one handling this?",note:"念のため確認=Just to confirm"},
+{s:0,lv:"l",jp:"うまくいかなかった原因を調べて、明日報告します。",en:"I'll look into why it didn't work and report back tomorrow.",note:"look into / report back"},
+{s:0,lv:"l",jp:"全体としては順調ですが、いくつか気になる点があります。",en:"Overall it's going well, but there are a few things I'm concerned about.",note:"気になる=concerned about"},
+/* --- 1: 雑談・スモールトーク --- */
+{s:1,lv:"s",jp:"最近どうしてた?",en:"How have you been?",note:"久しぶりの挨拶は現在完了"},
+{s:1,lv:"s",jp:"それ、面白そうだね。",en:"That sounds interesting.",note:"〜そう=sounds"},
+{s:1,lv:"s",jp:"週末は何してたの?",en:"What did you do over the weekend?",note:"週末に=over the weekend"},
+{s:1,lv:"s",jp:"もうこんな時間!",en:"Is it that late already?",note:"疑問文に発想転換"},
+{s:1,lv:"s",jp:"今日は冷えるね。",en:"It's chilly today.",note:"肌寒い=chilly"},
+{s:1,lv:"m",jp:"最近ハマってることある?",en:"Is there anything you're into these days?",note:"ハマる=be into"},
+{s:1,lv:"m",jp:"その話、前にも聞いた気がする。",en:"I feel like I've heard that story before.",note:"〜な気がする=I feel like"},
+{s:1,lv:"m",jp:"写真で見るより実物のほうがいいね。",en:"It looks better in person than in photos.",note:"実物で=in person"},
+{s:1,lv:"m",jp:"久しぶりに会えてうれしいよ。",en:"It's so good to see you again.",note:"直訳せずsee you againで"},
+{s:1,lv:"m",jp:"言いたいことはわかるけど、ちょっと違うかな。",en:"I see your point, but I'm not so sure.",note:"一理ある=see your point"},
+{s:1,lv:"l",jp:"疲れてるみたいだけど、ちゃんと寝てる?",en:"You look tired. Are you getting enough sleep?",note:"ちゃんと寝る=get enough sleep"},
+{s:1,lv:"l",jp:"その店、ずっと気になってたんだけど、まだ行けてないんだよね。",en:"I've been curious about that place, but I haven't had a chance to go yet.",note:"機会がない=haven't had a chance"},
+{s:1,lv:"l",jp:"天気が良かったから、つい遠回りして帰っちゃった。",en:"The weather was so nice that I ended up taking the long way home.",note:"つい〜しちゃった=end up -ing"},
+{s:1,lv:"l",jp:"最近時間が経つのが早すぎて、もう6月なんて信じられない。",en:"Time flies. I can't believe it's already June.",note:"時が経つのは早い=time flies"},
+{s:1,lv:"l",jp:"何でもない話なんだけど、聞いてくれる?",en:"It's nothing important, but can I tell you something?",note:"何でもない=nothing important"},
+/* --- 2: 意見や気持ちを伝える --- */
+{s:2,lv:"s",jp:"私はそうは思いません。",en:"I don't see it that way.",note:"婉曲な反対=see it that way"},
+{s:2,lv:"s",jp:"正直、ちょっと不安です。",en:"Honestly, I'm a bit worried.",note:"正直=honestly"},
+{s:2,lv:"s",jp:"それは良い考えだと思う。",en:"I think that's a good idea.",note:""},
+{s:2,lv:"s",jp:"どちらでも構いません。",en:"Either is fine with me.",note:"どちらでも=either"},
+{s:2,lv:"s",jp:"ちょっと考えさせて。",en:"Let me think about it.",note:"let me で柔らかく"},
+{s:2,lv:"m",jp:"あなたの意見も一理あると思います。",en:"I think you have a point.",note:"一理ある=have a point"},
+{s:2,lv:"m",jp:"個人的には、急がないほうがいいと思う。",en:"Personally, I think we shouldn't rush this.",note:"急ぐ=rush"},
+{s:2,lv:"m",jp:"うまく言えないけど、何か引っかかる。",en:"I can't explain it, but something feels off.",note:"違和感=feels off"},
+{s:2,lv:"m",jp:"それを聞いて安心しました。",en:"I'm relieved to hear that.",note:"安心する=relieved"},
+{s:2,lv:"m",jp:"期待していたほどではなかった。",en:"It wasn't as good as I expected.",note:"not as 〜 as の比較"},
+{s:2,lv:"l",jp:"反対というわけではなくて、もう少し情報が欲しいだけです。",en:"It's not that I'm against it. I just need a little more information.",note:"〜というわけではない=It's not that"},
+{s:2,lv:"l",jp:"最初は乗り気じゃなかったけど、今はやってよかったと思ってる。",en:"I wasn't excited about it at first, but now I'm glad I did it.",note:"やってよかった=glad I did"},
+{s:2,lv:"l",jp:"言い方は悪いかもしれないけど、これは時間の無駄だと思う。",en:"This might sound harsh, but I think it's a waste of time.",note:"きつい言い方=sound harsh"},
+{s:2,lv:"l",jp:"みんながどう思うかより、自分が納得できるかが大事だと思う。",en:"What matters to me is whether I'm convinced, not what everyone else thinks.",note:"大事なのは=What matters is"},
+{s:2,lv:"l",jp:"結果はどうあれ、挑戦したこと自体に意味があると思う。",en:"Whatever the outcome, I think trying was worth it in itself.",note:"どうあれ=whatever"},
+/* --- 3: 依頼・確認・お願い --- */
+{s:3,lv:"s",jp:"ちょっと手伝ってもらえますか。",en:"Could you give me a hand?",note:"手伝う=give me a hand"},
+{s:3,lv:"s",jp:"もう一度言ってもらえますか。",en:"Could you say that again?",note:""},
+{s:3,lv:"s",jp:"これで合っていますか。",en:"Is this correct?",note:""},
+{s:3,lv:"s",jp:"後で電話してもいい?",en:"Can I call you later?",note:""},
+{s:3,lv:"s",jp:"鍵を借りてもいいですか。",en:"Could I borrow the key?",note:"borrowとlendの方向に注意"},
+{s:3,lv:"m",jp:"お手数ですが、写真を送ってもらえますか。",en:"Sorry to bother you, but could you send me the photos?",note:"お手数ですが=Sorry to bother you"},
+{s:3,lv:"m",jp:"明日の予定を確認させてください。",en:"Let me double-check tomorrow's schedule.",note:"念入りに確認=double-check"},
+{s:3,lv:"m",jp:"これを金曜までにお願いできますか。",en:"Could you have this done by Friday?",note:"have this done の形"},
+{s:3,lv:"m",jp:"間違っていたら教えてください。",en:"Please correct me if I'm wrong.",note:"correct me が決まり文句"},
+{s:3,lv:"m",jp:"場所がわからないので、地図を送ってもらえますか。",en:"I'm not sure where it is. Could you send me a map?",note:"where it is の語順"},
+{s:3,lv:"l",jp:"急ぎではないので、手が空いたときで大丈夫です。",en:"It's not urgent, so whenever you have time is fine.",note:"手が空いたとき=whenever you have time"},
+{s:3,lv:"l",jp:"確認なんですが、集合は9時で変わりないですよね。",en:"Just checking. We're still meeting at nine, right?",note:"確認なんですが=Just checking"},
+{s:3,lv:"l",jp:"もし可能なら、もう一日だけ待ってもらえるとありがたいです。",en:"If possible, I'd appreciate it if you could give me one more day.",note:"I'd appreciate it if"},
+{s:3,lv:"l",jp:"わかりにくかったら、遠慮なく聞いてください。",en:"If anything is unclear, don't hesitate to ask.",note:"遠慮なく=don't hesitate"},
+{s:3,lv:"l",jp:"念のため、終わったら一言連絡をもらえますか。",en:"Just in case, could you let me know when it's done?",note:"連絡する=let me know"},
+/* --- 4: 獣医の現場(農場・診療) --- */
+{s:4,lv:"s",jp:"この牛は熱があります。",en:"This cow has a fever.",note:""},
+{s:4,lv:"s",jp:"いつから食べていませんか。",en:"When did she stop eating?",note:"stop -ing。乳牛はsheで受ける"},
+{s:4,lv:"s",jp:"触診させてください。",en:"Let me examine her.",note:"診察する=examine"},
+{s:4,lv:"s",jp:"乳房が腫れています。",en:"The udder is swollen.",note:"腫れている=swollen"},
+{s:4,lv:"s",jp:"経過を見ましょう。",en:"Let's wait and see.",note:"経過観察=wait and see"},
+{s:4,lv:"m",jp:"抗生物質を3日間投与します。",en:"I'll give her antibiotics for three days.",note:"投与する=give"},
+{s:4,lv:"m",jp:"餌の量を少し減らしてください。",en:"Please cut back a little on her feed.",note:"減らす=cut back on"},
+{s:4,lv:"m",jp:"明日もう一度様子を見に来ます。",en:"I'll come back tomorrow to check on her.",note:"様子を見る=check on"},
+{s:4,lv:"m",jp:"出産予定日はいつですか。",en:"When is she due?",note:"出産予定=due"},
+{s:4,lv:"m",jp:"症状はいつ頃から出ていますか。",en:"How long has she had these symptoms?",note:"継続は現在完了+how long"},
+{s:4,lv:"l",jp:"検査の結果が出るまで、他の牛と離しておいてください。",en:"Please keep her away from the other cows until the test results come back.",note:"隔離する=keep away from"},
+{s:4,lv:"l",jp:"良くなっているように見えても、薬は最後まで続けてください。",en:"Even if she seems better, please finish the full course of medication.",note:"最後まで=full course"},
+{s:4,lv:"l",jp:"この薬を使うと、出荷できるまでに数日かかります。",en:"With this drug, there's a withdrawal period of a few days before shipping.",note:"休薬期間=withdrawal period"},
+{s:4,lv:"l",jp:"状態が急に悪くなったら、夜中でも連絡してください。",en:"If her condition suddenly gets worse, call me even in the middle of the night.",note:"悪化する=get worse"},
+{s:4,lv:"l",jp:"蹄が原因で歩き方がおかしくなっている可能性があります。",en:"The lameness may be coming from a problem in her hoof.",note:"跛行=lameness, 蹄=hoof"},
+/* --- 5: 旅行・店での会話 --- */
+{s:5,lv:"s",jp:"窓側の席をお願いします。",en:"A window seat, please.",note:""},
+{s:5,lv:"s",jp:"これは何が入っていますか。",en:"What's in this?",note:"シンプルにWhat's in"},
+{s:5,lv:"s",jp:"持ち帰りでお願いします。",en:"To go, please.",note:"持ち帰り=to go"},
+{s:5,lv:"s",jp:"試着してもいいですか。",en:"Can I try this on?",note:"試着=try on"},
+{s:5,lv:"s",jp:"駅はどっちですか。",en:"Which way is the station?",note:"どっち=which way"},
+{s:5,lv:"m",jp:"おすすめは何ですか。",en:"What do you recommend?",note:"youを主語に"},
+{s:5,lv:"m",jp:"もう少し安いものはありますか。",en:"Do you have anything cheaper?",note:"anything+比較級"},
+{s:5,lv:"m",jp:"ここから歩いてどのくらいですか。",en:"How long does it take to walk from here?",note:"it takes の形"},
+{s:5,lv:"m",jp:"写真を撮ってもらえますか。",en:"Could you take a picture of us?",note:"of usを忘れず"},
+{s:5,lv:"m",jp:"別々に会計してもらえますか。",en:"Could we get separate checks?",note:"別会計=separate checks"},
+{s:5,lv:"l",jp:"予約していないんですが、2人入れますか。",en:"We don't have a reservation. Do you have a table for two?",note:"a table for two"},
+{s:5,lv:"l",jp:"アレルギーがあるので、卵が入っていないか確認してもらえますか。",en:"I have an allergy. Could you check if this has any egg in it?",note:"check if の形"},
+{s:5,lv:"l",jp:"チェックアウトの後、荷物を預かってもらうことはできますか。",en:"Could you keep our luggage after we check out?",note:"預かる=keep"},
+{s:5,lv:"l",jp:"道に迷ってしまって、このホテルへの行き方を教えてもらえますか。",en:"I'm lost. Could you tell me how to get to this hotel?",note:"行き方=how to get to"},
+{s:5,lv:"l",jp:"思っていたものと違うので、返品できますか。",en:"This isn't what I expected. Can I return it?",note:"what I expected"}
+];
+
+/* ================= storage ================= */
+const store = {
+  get(k, fb) { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch { return fb; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+/* ================= state ================= */
+const SOURCES = [
+  { id: "bank",   label: "内蔵問題集", tag: "0円" },
+  { id: "claude", label: "Claudeアプリ", tag: "0円" },
+  { id: "api",    label: "API", tag: "従量" }
+];
+const SCENES = ["仕事の報告・相談", "雑談・スモールトーク", "意見や気持ちを伝える", "依頼・確認・お願い", "獣医の現場(農場・診療)", "旅行・店での会話"];
+const LEVELS = [
+  { id: "s", label: "短文 (〜7語)" },
+  { id: "m", label: "普通 (8〜12語)" },
+  { id: "l", label: "長め (13語〜)" }
+];
+const TIMERS = [ { s: 5, label: "5秒" }, { s: 8, label: "8秒" }, { s: 12, label: "12秒" }, { s: 0, label: "なし" } ];
+
+let cfg = store.get("is_cfg", { src: "bank", scene: 0, level: "s", timer: 8 });
+let weakDeck = store.get("is_weak", []);     // {jp,en,note,date}
+let history  = store.get("is_hist", []);     // {date,total,good,scene}
+let usedJp   = store.get("is_used", []);     // 内蔵問題の出題済みキー
+let edits    = store.get("is_edits", {});    // {origJp: {jp,en,note}} 内蔵問題の上書き
+let custom   = store.get("is_custom", []);   // ユーザー追加 {s,lv,jp,en,note}
+let deleted  = store.get("is_deleted", []);  // 削除した内蔵問題のorigJp
+let deckScene = 0;                            // 問題集画面のシーンフィルタ
+let editTarget = null;                        // 編集対象 {type, key|idx, fromResult}
+let drill = [];
+let results = [];
+let idx = 0;
+let timerId = null;
+
+/* ================= setup UI ================= */
+const $ = id => document.getElementById(id);
+function chips(el, items, getSel, onSel) {
+  el.innerHTML = "";
+  items.forEach((it, i) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (getSel(it, i) ? " sel" : "");
+    b.innerHTML = (it.label || it) + (it.tag ? `<small>${it.tag}</small>` : "");
+    b.onclick = () => { onSel(it, i); renderSetup(); };
+    el.appendChild(b);
+  });
+}
+function renderSetup() {
+  chips($("srcChips"), SOURCES, it => cfg.src === it.id, it => { cfg.src = it.id; save(); });
+  chips($("sceneChips"), SCENES, (_, i) => cfg.scene === i && !$("customScene").value.trim(),
+    (_, i) => { cfg.scene = i; $("customScene").value = ""; save(); });
+  chips($("levelChips"), LEVELS, it => cfg.level === it.id, it => { cfg.level = it.id; save(); });
+  chips($("timerChips"), TIMERS, it => cfg.timer === it.s, it => { cfg.timer = it.s; save(); });
+  $("apiKey").value = store.get("is_key", "");
+
+  // モードごとの表示切替
+  const isClaude = cfg.src === "claude";
+  $("claudeBox").style.display = isClaude ? "block" : "none";
+  $("btnStart").style.display = isClaude ? "none" : "block";
+  $("btnStart").textContent = cfg.src === "api" ? "10問ドリルを開始 (API生成)" : "10問ドリルを開始";
+  $("customNote").style.display = (cfg.src === "bank" && $("customScene").value.trim()) ? "block" : "none";
+
+  const wc = weakDeck.length;
+  $("weakCount").textContent = wc;
+  $("btnWeak").style.display = wc >= 3 ? "block" : "none";
+
+  if (history.length) {
+    const h = history[history.length - 1];
+    $("lastScore").style.display = "block";
+    $("lastScore").innerHTML = `前回: <b>${h.good}/${h.total}</b> 言えた (${h.scene})`;
+    $("histBadge").textContent = `通算 ${history.length} 周`;
+  }
+}
+function save() { store.set("is_cfg", cfg); }
+$("apiKey").addEventListener("change", e => store.set("is_key", e.target.value.trim()));
+$("customScene").addEventListener("input", renderSetup);
+
+/* ================= screen switch ================= */
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
+  $(id).classList.add("on");
+  window.scrollTo(0, 0);
+}
+function setupError(msg) {
+  show("scrSetup");
+  $("errSetup").textContent = msg;
+  $("errSetup").style.display = "block";
+}
+
+/* ================= 出題ソース①: 内蔵問題集 ================= */
+function effectiveBank() {
+  // 内蔵問題に上書き・削除を適用し、ユーザー追加分を合流
+  const base = BANK
+    .filter(q => !deleted.includes(q.jp))
+    .map(q => {
+      const e = edits[q.jp];
+      return e ? { s: q.s, lv: q.lv, jp: e.jp, en: e.en, note: e.note, _key: q.jp, _src: "bank" }
+               : { ...q, _key: q.jp, _src: "bank" };
+    });
+  const cus = custom.map((q, i) => ({ ...q, _key: "c:" + q.jp, _src: "custom", _ci: i }));
+  return base.concat(cus);
+}
+function pickFromBank() {
+  const pool = effectiveBank().filter(q => q.s === cfg.scene);
+  let fresh = pool.filter(q => !usedJp.includes(q._key));
+  if (fresh.length < 10) { // 一巡したらこのシーンの履歴をリセット
+    usedJp = usedJp.filter(k => !pool.some(q => q._key === k));
+    fresh = pool;
+  }
+  // レベル優先で並べてから不足分を他レベルで補充
+  const pref = fresh.filter(q => q.lv === cfg.level);
+  const rest = fresh.filter(q => q.lv !== cfg.level);
+  shuffle(pref); shuffle(rest);
+  const picked = pref.concat(rest).slice(0, 10);
+  shuffle(picked);
+  usedJp.push(...picked.map(q => q._key));
+  store.set("is_used", usedJp);
+  return picked.map(({ jp, en, note, _key, _src }) => ({ jp, en, note, _key, _src }));
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
+
+/* ================= 出題ソース②: Claudeアプリ(コピー&ペースト) ================= */
+function buildPrompt(sceneText) {
+  const lvDesc = { s: "7語以内の短い文", m: "8〜12語程度の文", l: "13語以上のやや長い文" }[cfg.level];
+  return `あなたは瞬間英作文ドリルの問題作成者です。
+シーン:「${sceneText}」
+このシーンで実際に言いそうな日本語の文を10個作り、それぞれ自然な英訳を付けてください。
+
+条件:
+- 英文は${lvDesc}。日常的に本当に使う自然な口語表現
+- 直訳調を避け、ネイティブが言う形に
+- noteには「言えない原因になりやすいポイント」を日本語で一言(語順・前置詞・発想の転換など)
+- 10文は互いに違う構文・場面バリエーションにする
+
+以下のJSONのみを出力。前置きやマークダウン記法は一切不要:
+{"sentences":[{"jp":"...","en":"...","note":"..."}]}`;
+}
+$("btnCopyPrompt").onclick = async () => {
+  const sceneText = $("customScene").value.trim() || SCENES[cfg.scene];
+  try {
+    await navigator.clipboard.writeText(buildPrompt(sceneText));
+    $("btnCopyPrompt").textContent = "コピーしました ✓ Claudeに貼ってください";
+    setTimeout(() => $("btnCopyPrompt").textContent = "① プロンプトをコピー → Claudeに貼る", 2500);
+  } catch { setupError("コピーに失敗しました。手動でコピーしてください"); }
+};
+function normalizeQuotes(s) {
+  // Claudeモバイルアプリ由来のスマートクォート対策
+  return s
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\uFF02]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\uFF07]/g, "'");
+}
+function parseSentences(text) {
+  const clean = normalizeQuotes(text).replace(/```json|```/g, "").trim();
+  const start = clean.indexOf("{"), end = clean.lastIndexOf("}");
+  if (start < 0 || end < 0) throw new Error("JSONが見つかりません。Claudeの返答全体を貼ってください");
+  const parsed = JSON.parse(clean.slice(start, end + 1));
+  if (!parsed.sentences || !parsed.sentences.length) throw new Error("sentencesが空です");
+  return parsed.sentences.filter(q => q.jp && q.en);
+}
+$("btnImport").onclick = () => {
+  $("errSetup").style.display = "none";
+  try {
+    drill = parseSentences($("pasteJson").value);
+    drill.sceneName = $("customScene").value.trim() || SCENES[cfg.scene];
+    $("pasteJson").value = "";
+    startDrill();
+  } catch (e) { setupError("取り込みエラー: " + e.message); }
+};
+
+/* ================= 出題ソース③: API ================= */
+async function generateViaApi(sceneText) {
+  const key = store.get("is_key", "");
+  if (!key) throw new Error("API設定からAPIキーを入力してください(0円で使うなら出題ソースを「内蔵問題集」か「Claudeアプリ」に)");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      messages: [{ role: "user", content: buildPrompt(sceneText) }]
+    })
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`API エラー (${res.status}): ${t.slice(0, 120)}`);
+  }
+  const data = await res.json();
+  const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+  return parseSentences(text);
+}
+
+/* ================= drill flow ================= */
+$("btnStart").onclick = async () => {
+  const sceneText = $("customScene").value.trim() || SCENES[cfg.scene];
+  $("errSetup").style.display = "none";
+  if (cfg.src === "bank") {
+    if ($("customScene").value.trim()) { setupError("自由入力シーンは「Claudeアプリ」か「API」で生成してください"); return; }
+    drill = pickFromBank();
+    drill.sceneName = sceneText;
+    startDrill();
+    return;
+  }
+  // API
+  show("scrLoading");
+  try {
+    drill = await generateViaApi(sceneText);
+    drill.sceneName = sceneText;
+    startDrill();
+  } catch (e) { setupError(e.message); }
+};
+
+$("btnWeak").onclick = () => {
+  drill = weakDeck.slice(0, 10).map(w => ({ jp: w.jp, en: w.en, note: w.note }));
+  drill.sceneName = "弱点復習";
+  drill.isWeakReview = true;
+  startDrill();
+};
+
+function startDrill() {
+  results = [];
+  idx = 0;
+  show("scrDrill");
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const bar = $("progBar");
+  bar.innerHTML = "";
+  for (let i = 0; i < drill.length; i++) {
+    const d = document.createElement("i");
+    if (i < idx) d.className = "done-" + results[i];
+    else if (i === idx) d.className = "now";
+    bar.appendChild(d);
+  }
+  $("qJp").textContent = drill[idx].jp;
+  $("ansBox").classList.remove("on");
+  $("btnReveal").style.display = "block";
+  $("speakHint").textContent = "声に出して英語で言ってみる";
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timerId);
+  const fg = $("ringFg"), num = $("ringNum"), wrap = $("ringWrap");
+  const C = 2 * Math.PI * 27;
+  fg.style.strokeDasharray = C;
+  if (!cfg.timer) { wrap.style.display = "none"; return; }
+  wrap.style.display = "flex";
+  let t = cfg.timer;
+  num.textContent = t;
+  fg.style.transition = "none";
+  fg.style.strokeDashoffset = 0;
+  requestAnimationFrame(() => {
+    fg.style.transition = "stroke-dashoffset 1s linear";
+    fg.style.strokeDashoffset = C * (1 / cfg.timer);
+    timerId = setInterval(() => {
+      t--;
+      if (t <= 0) {
+        clearInterval(timerId);
+        num.textContent = "0";
+        fg.style.strokeDashoffset = C;
+        reveal();
+        return;
+      }
+      num.textContent = t;
+      fg.style.strokeDashoffset = C * (1 - t / cfg.timer);
+    }, 1000);
+  });
+}
+
+function reveal() {
+  clearInterval(timerId);
+  $("aEn").textContent = drill[idx].en;
+  $("aTip").textContent = drill[idx].note ? "💡 " + drill[idx].note : "";
+  $("ansBox").classList.add("on");
+  $("btnReveal").style.display = "none";
+  $("speakHint").textContent = "模範解答を声に出して2回リピート";
+}
+$("btnReveal").onclick = reveal;
+
+document.querySelectorAll(".grade button").forEach(b => {
+  b.onclick = () => {
+    results.push(b.dataset.g);
+    const q = drill[idx];
+    if (b.dataset.g !== "good") {
+      if (!weakDeck.some(w => w.jp === q.jp)) {
+        weakDeck.push({ jp: q.jp, en: q.en, note: q.note || "", date: new Date().toISOString().slice(0, 10) });
+      }
+    } else if (drill.isWeakReview) {
+      weakDeck = weakDeck.filter(w => w.jp !== q.jp);
+    }
+    store.set("is_weak", weakDeck);
+    idx++;
+    if (idx < drill.length) renderQuestion();
+    else finish();
+  };
+});
+
+/* ================= results ================= */
+function finish() {
+  clearInterval(timerId);
+  const good = results.filter(r => r === "good").length;
+  if (!drill.isWeakReview) {
+    history.push({ date: new Date().toISOString().slice(0, 10), total: drill.length, good, scene: drill.sceneName });
+    store.set("is_hist", history);
+  }
+  $("rNum").textContent = good;
+  $("rDen").textContent = drill.length;
+
+  const trendEl = $("rTrend");
+  if (!drill.isWeakReview && history.length >= 2) {
+    const prev = history[history.length - 2];
+    const diff = (good / drill.length) - (prev.good / prev.total);
+    trendEl.innerHTML = diff > 0 ? `<span class="up">▲ 前回より +${Math.round(diff * 100)}pt</span>`
+      : diff < 0 ? `<span class="down">前回より ${Math.round(diff * 100)}pt</span>`
+      : `<span class="down">前回と同じ</span>`;
+  } else if (drill.isWeakReview) {
+    trendEl.innerHTML = `<span class="up">◎で言えた文は弱点デッキから卒業</span>`;
+  } else trendEl.textContent = "";
+
+  const list = $("weakList");
+  function renderMisses() {
+    list.innerHTML = "";
+    const misses = drill.map((q, i) => ({ ...q, g: results[i], _di: i })).filter(q => q.g !== "good");
+    if (!misses.length) {
+      list.innerHTML = `<div class="empty-weak">全部言えた 🎉 レベルを上げてみては</div>`;
+      $("btnCsv").style.display = $("btnCsvDl").style.display = $("btnRetry").style.display = "none";
+      return;
+    }
+    $("btnCsv").style.display = $("btnCsvDl").style.display = $("btnRetry").style.display = "block";
+    misses.forEach(m => {
+      const d = document.createElement("div");
+      d.className = "weak-item";
+      d.innerHTML = `<span class="mark">${m.g === "bad" ? "✗" : "△"}</span>
+        <button class="wedit">✎</button>
+        <div class="wjp"></div><div class="wen"></div>`;
+      d.querySelector(".wjp").textContent = m.jp;
+      d.querySelector(".wen").textContent = m.en;
+      d.querySelector(".wedit").onclick = () => openEditor({ type: "drill", idx: m._di }, drill[m._di]);
+      list.appendChild(d);
+    });
+  }
+  finish.rerender = renderMisses;
+  renderMisses();
+  show("scrResult");
+}
+
+/* ================= CSV (Anki: Front,Back) ================= */
+function buildCsv() {
+  const misses = drill.map((q, i) => ({ ...q, g: results[i] })).filter(q => q.g !== "good");
+  const esc = s => `"${String(s).replace(/"/g, '""')}"`;
+  return misses.map(m => {
+    const back = m.en + (m.note ? `<br><span style='font-size:.85em;color:#888'>${m.note}</span>` : "");
+    return `${esc(m.jp)},${esc(back)}`;
+  }).join("\n");
+}
+$("btnCsv").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(buildCsv());
+    $("btnCsv").textContent = "コピーしました ✓";
+    setTimeout(() => $("btnCsv").textContent = "AnkiカードCSVをコピー", 1800);
+  } catch {
+    $("errResult").textContent = "コピーに失敗。「CSVファイルで保存」をお使いください";
+    $("errResult").style.display = "block";
+  }
+};
+$("btnCsvDl").onclick = () => {
+  const blob = new Blob(["\uFEFF" + buildCsv()], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `instantspeak_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+$("btnRetry").onclick = () => {
+  const misses = drill.map((q, i) => ({ ...q, g: results[i] })).filter(q => q.g !== "good");
+  const name = drill.sceneName;
+  drill = misses.map(({ jp, en, note }) => ({ jp, en, note }));
+  drill.sceneName = name;
+  drill.isWeakReview = true;
+  startDrill();
+};
+$("btnHome").onclick = () => { renderSetup(); show("scrSetup"); };
+
+/* ================= drive mode (音声のみ・ハンズフリー) ================= */
+let driveCfg = store.get("is_drive", { src: "scene", timer: 6, voice: false });
+let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0;
+let driveLog = []; // 今回流れた文 {jp,en,g:null|"good"|"soso"|"bad"}
+let wakeLockRef = null, ssKeepAlive = null, voicesCache = [];
+const DRIVE_SRC = [ { id: "scene", label: "今のシーンの問題集" }, { id: "weak", label: "弱点デッキ" } ];
+const DRIVE_TIMERS = [ { s: 4, label: "4秒" }, { s: 6, label: "6秒" }, { s: 9, label: "9秒" } ];
+const DRIVE_VOICE = [ { id: true, label: "ON" }, { id: false, label: "OFF" } ];
+
+/* ---- 音声認識(評価用) ---- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function recognizeOnce(timeoutMs) {
+  return new Promise(res => {
+    if (!SR || !driveOn) return res(null);
+    let done = false;
+    const finish = v => { if (!done) { done = true; try { rec.stop(); } catch {} res(v); } };
+    let rec;
+    try { rec = new SR(); } catch { return res(null); }
+    rec.lang = "ja-JP";
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    rec.onresult = e => {
+      const texts = [];
+      for (const r of e.results[0]) texts.push(r.transcript);
+      finish(texts.join(" "));
+    };
+    rec.onerror = () => finish(null);
+    rec.onend = () => finish(null);
+    try { rec.start(); } catch { return finish(null); }
+    setTimeout(() => finish(null), timeoutMs);
+  });
+}
+function classifyGrade(text) {
+  if (!text) return null;
+  if (/できなかった|出てこな|だめ|ダメ|わからな|無理/.test(text)) return "bad";
+  if (/むずかし|難し|惜し|うーん|微妙|まあまあ/.test(text)) return "soso";
+  if (/できた|出来た|言えた|オッケー|おっけ|OK|ok/.test(text)) return "good";
+  return null;
+}
+function gradeMark(g) { return g === "good" ? "◎" : g === "soso" ? "△" : g === "bad" ? "✗" : "−"; }
+
+function loadVoices() {
+  voicesCache = speechSynthesis.getVoices();
+  if (!voicesCache.length) speechSynthesis.onvoiceschanged = () => { voicesCache = speechSynthesis.getVoices(); };
+}
+function pickVoice(lang, prefer) {
+  return voicesCache.find(v => prefer.some(p => v.name.includes(p)))
+      || voicesCache.find(v => v.lang && v.lang.startsWith(lang))
+      || null;
+}
+function speak(text, lang, rate) {
+  return new Promise(res => {
+    if (!driveOn) return res();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === "ja" ? "ja-JP" : "en-US";
+    const v = lang === "ja" ? pickVoice("ja", ["Kyoko", "O-Ren"]) : pickVoice("en", ["Samantha", "Karen", "Daniel"]);
+    if (v) u.voice = v;
+    u.rate = rate || 1;
+    u.onend = res;
+    u.onerror = res;
+    speechSynthesis.speak(u);
+  });
+}
+let audioCtx = null;
+function beep() {
+  return new Promise(res => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.12;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.18);
+      o.onended = res;
+      setTimeout(res, 300);
+    } catch { res(); }
+  });
+}
+function sleepCheck(ms) {
+  // driveOn監視つきsleep(一時停止中は待機)
+  return new Promise(async res => {
+    let t = 0;
+    while (t < ms || drivePaused) {
+      if (!driveOn) return res();
+      await new Promise(r => setTimeout(r, 200));
+      if (!drivePaused) t += 200;
+    }
+    res();
+  });
+}
+
+$("btnDrive").onclick = () => {
+  loadVoices();
+  chips($("driveSrcChips"), DRIVE_SRC, it => driveCfg.src === it.id, it => { driveCfg.src = it.id; store.set("is_drive", driveCfg); $("btnDrive").click(); });
+  chips($("driveTimerChips"), DRIVE_TIMERS, it => driveCfg.timer === it.s, it => { driveCfg.timer = it.s; store.set("is_drive", driveCfg); $("btnDrive").click(); });
+  chips($("driveVoiceChips"), DRIVE_VOICE, it => driveCfg.voice === it.id, it => { driveCfg.voice = it.id; store.set("is_drive", driveCfg); $("btnDrive").click(); });
+  if (!SR) { driveCfg.voice = false; $("driveVoiceChips").innerHTML = '<span class="note">この端末は音声認識に未対応のためOFFになります</span>'; }
+  show("scrDriveSetup");
+};
+$("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
+
+$("btnDriveStart").onclick = async () => {
+  $("errDrive").style.display = "none";
+  if (driveCfg.src === "weak") {
+    if (!weakDeck.length) { $("errDrive").textContent = "弱点デッキが空です。先に通常ドリルをどうぞ"; $("errDrive").style.display = "block"; return; }
+    driveQueue = weakDeck.map(({ jp, en }) => ({ jp, en }));
+  } else {
+    driveQueue = effectiveBank().filter(q => q.s === cfg.scene).map(({ jp, en }) => ({ jp, en }));
+  }
+  shuffle(driveQueue);
+  driveIdx = 0;
+  driveLog = [];
+  driveOn = true;
+  drivePaused = false;
+  loadVoices();
+  // 画面スリープ防止
+  try { wakeLockRef = await navigator.wakeLock.request("screen"); } catch {}
+  // iOS/Chromeの読み上げ停止バグ対策
+  ssKeepAlive = setInterval(() => { if (driveOn && !drivePaused) { speechSynthesis.pause(); speechSynthesis.resume(); } }, 10000);
+  show("scrDrive");
+  driveLoop();
+};
+
+async function driveLoop() {
+  while (driveOn) {
+    const q = driveQueue[driveIdx];
+    $("dPhase").textContent = `${driveIdx + 1} / ${driveQueue.length}`;
+    $("dJp").textContent = q.jp;
+    $("dEn").textContent = "";
+    await speak(q.jp, "ja", 1);
+    if (!driveOn) break;
+    await beep();
+    $("dPhase").textContent = "英語で言ってみる";
+    await sleepCheck(driveCfg.timer * 1000);
+    if (!driveOn) break;
+    $("dEn").textContent = q.en;
+    $("dPhase").textContent = "答え(2回流れます)";
+    await speak(q.en, "en", 0.95);
+    await sleepCheck(500);
+    await speak(q.en, "en", 0.85);
+    if (!driveOn) break;
+    // ログ記録 + 音声評価
+    let entry = driveLog.find(l => l.jp === q.jp);
+    if (!entry) { entry = { jp: q.jp, en: q.en, g: null }; driveLog.push(entry); }
+    if (driveCfg.voice && SR) {
+      await beep(); await beep();
+      $("dPhase").textContent = "評価: できた / むずかしい / できなかった";
+      const heard = await recognizeOnce(3500);
+      const g = classifyGrade(heard);
+      if (g) {
+        entry.g = g;
+        $("dPhase").textContent = "記録: " + gradeMark(g);
+        await sleepCheck(700);
+      }
+    }
+    await sleepCheck(1200);
+    driveIdx++;
+    if (driveIdx >= driveQueue.length) { shuffle(driveQueue); driveIdx = 0; } // エンドレス
+  }
+}
+
+$("btnDrivePause").onclick = () => {
+  drivePaused = !drivePaused;
+  if (drivePaused) speechSynthesis.pause(); else speechSynthesis.resume();
+  $("btnDrivePause").textContent = drivePaused ? "▶ 再開" : "⏸ 一時停止";
+};
+$("btnDriveStop").onclick = stopDrive;
+function stopDrive() {
+  driveOn = false;
+  drivePaused = false;
+  speechSynthesis.cancel();
+  clearInterval(ssKeepAlive);
+  if (wakeLockRef) { try { wakeLockRef.release(); } catch {} wakeLockRef = null; }
+  $("btnDrivePause").textContent = "⏸ 一時停止";
+  if (driveLog.length) { renderDriveLog(); show("scrDriveLog"); }
+  else { renderSetup(); show("scrSetup"); }
+}
+
+/* ---- 降車後のまとめ評価 ---- */
+function renderDriveLog() {
+  const list = $("driveLogList");
+  list.innerHTML = "";
+  driveLog.forEach(l => {
+    const d = document.createElement("div");
+    d.className = "log-item";
+    d.innerHTML = `<span class="lmark"></span><div class="ltexts"><div class="ljp"></div><div class="len"></div></div>`;
+    d.querySelector(".lmark").textContent = gradeMark(l.g);
+    d.querySelector(".ljp").textContent = l.jp;
+    d.querySelector(".len").textContent = l.en;
+    d.onclick = () => {
+      l.g = l.g === null ? "good" : l.g === "good" ? "soso" : l.g === "soso" ? "bad" : null;
+      d.querySelector(".lmark").textContent = gradeMark(l.g);
+    };
+    list.appendChild(d);
+  });
+}
+$("btnLogSave").onclick = () => {
+  driveLog.forEach(l => {
+    if (l.g === "soso" || l.g === "bad") {
+      if (!weakDeck.some(w => w.jp === l.jp)) {
+        weakDeck.push({ jp: l.jp, en: l.en, note: "", date: new Date().toISOString().slice(0, 10) });
+      }
+    } else if (l.g === "good" && driveCfg.src === "weak") {
+      weakDeck = weakDeck.filter(w => w.jp !== l.jp); // 弱点復習で◎なら卒業
+    }
+  });
+  store.set("is_weak", weakDeck);
+  driveLog = [];
+  renderSetup();
+  show("scrSetup");
+};
+$("btnLogSkip").onclick = () => { driveLog = []; renderSetup(); show("scrSetup"); };
+
+/* ================= deck editor ================= */
+$("btnDeck").onclick = () => { deckScene = cfg.scene; renderDeck(); show("scrDeck"); };
+$("btnDeckHome").onclick = () => { renderSetup(); show("scrSetup"); };
+
+function renderDeck() {
+  chips($("deckSceneChips"), SCENES, (_, i) => deckScene === i, (_, i) => { deckScene = i; renderDeck(); });
+  const pool = effectiveBank().filter(q => q.s === deckScene);
+  $("deckCount").textContent = `${pool.length}問 (タップで編集)`;
+  const list = $("deckList");
+  list.innerHTML = "";
+  pool.forEach(q => {
+    const d = document.createElement("div");
+    d.className = "deck-item";
+    d.innerHTML = `<span class="dtag">${q._src === "custom" ? "追加" : LEVELS.find(l => l.id === q.lv).label.split(" ")[0]}</span>
+      <div class="djp"></div><div class="den"></div>`;
+    d.querySelector(".djp").textContent = q.jp;
+    d.querySelector(".den").textContent = q.en;
+    d.onclick = () => openEditor(
+      q._src === "custom" ? { type: "custom", idx: q._ci } : { type: "bank", key: q._key },
+      q
+    );
+    list.appendChild(d);
+  });
+}
+
+$("btnAddSent").onclick = () => {
+  openEditor({ type: "new" }, { jp: "", en: "", note: "" });
+};
+
+function openEditor(target, q) {
+  editTarget = target;
+  $("edJp").value = q.jp;
+  $("edEn").value = q.en;
+  $("edNote").value = q.note || "";
+  $("edDelete").style.display = target.type === "new" ? "none" : "block";
+  $("editModalBg").classList.add("on");
+}
+function closeEditor() { $("editModalBg").classList.remove("on"); editTarget = null; }
+$("edCancel").onclick = closeEditor;
+$("editModalBg").onclick = e => { if (e.target === $("editModalBg")) closeEditor(); };
+
+function syncWeakDeck(oldJp, q) {
+  // 弱点デッキに同じ文があれば追従させる
+  const w = weakDeck.find(w => w.jp === oldJp);
+  if (w) { w.jp = q.jp; w.en = q.en; w.note = q.note; store.set("is_weak", weakDeck); }
+}
+
+$("edSave").onclick = () => {
+  const q = { jp: $("edJp").value.trim(), en: $("edEn").value.trim(), note: $("edNote").value.trim() };
+  if (!q.jp || !q.en) return;
+  const t = editTarget;
+  if (t.type === "bank") {
+    const orig = BANK.find(b => b.jp === t.key);
+    const oldJp = (edits[t.key] || orig).jp;
+    edits[t.key] = q;
+    store.set("is_edits", edits);
+    syncWeakDeck(oldJp, q);
+  } else if (t.type === "custom") {
+    const oldJp = custom[t.idx].jp;
+    custom[t.idx] = { ...custom[t.idx], ...q };
+    store.set("is_custom", custom);
+    syncWeakDeck(oldJp, q);
+  } else if (t.type === "new") {
+    custom.push({ s: deckScene, lv: cfg.level, ...q });
+    store.set("is_custom", custom);
+  } else if (t.type === "drill") {
+    // 結果画面からの編集: 今回のドリルと弱点デッキを更新
+    const item = drill[t.idx];
+    const oldJp = item.jp;
+    item.jp = q.jp; item.en = q.en; item.note = q.note;
+    syncWeakDeck(oldJp, q);
+    if (item._src === "bank" && item._key) { edits[item._key] = q; store.set("is_edits", edits); }
+    finish.rerender && finish.rerender();
+  }
+  closeEditor();
+  if (t.type !== "drill") renderDeck();
+};
+
+$("edDelete").onclick = () => {
+  const t = editTarget;
+  if (t.type === "bank") {
+    deleted.push(t.key);
+    store.set("is_deleted", deleted);
+    delete edits[t.key];
+    store.set("is_edits", edits);
+  } else if (t.type === "custom") {
+    custom.splice(t.idx, 1);
+    store.set("is_custom", custom);
+  } else if (t.type === "drill") {
+    // ドリル中の削除は弱点デッキから外すだけ
+    weakDeck = weakDeck.filter(w => w.jp !== drill[t.idx].jp);
+    store.set("is_weak", weakDeck);
+  }
+  closeEditor();
+  if (t.type !== "drill") renderDeck();
+};
+
+renderSetup();
+</script>
+</body>
+</html>
