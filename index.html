@@ -311,6 +311,8 @@ details.keybox > div { margin-top: 10px; }
     <div class="chips" id="driveTimerChips"></div>
     <div class="label">英語の声</div>
     <div class="chips" id="driveEnVoiceChips"></div>
+    <div class="label">英語の再生スピード</div>
+    <div class="chips" id="driveEnRateChips"></div>
     <button class="btn btn-sub" id="btnVoicePreview" style="margin-top:0">🔊 試聴する</button>
     <div class="note" id="voiceHint" style="display:none">この端末により流暢な音声を追加できます: 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「プレミアム」または「Enhanced」の声をダウンロードすると、ここで選べるようになります。</div>
     <div class="label">声で評価をつける</div>
@@ -859,13 +861,15 @@ $("btnRetry").onclick = () => {
 $("btnHome").onclick = () => { renderSetup(); show("scrSetup"); };
 
 /* ================= drive mode (音声のみ・ハンズフリー) ================= */
-let driveCfg = store.get("is_drive", { src: "scene", timer: 6, voice: false, enVoiceURI: "auto" });
+let driveCfg = store.get("is_drive", { src: "scene", timer: 6, voice: false, enVoiceURI: "auto", enRate: 0.95 });
 if (!driveCfg.enVoiceURI) driveCfg.enVoiceURI = "auto"; // 旧バージョンの保存データを補完
+if (!driveCfg.enRate) driveCfg.enRate = 0.95;
 let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0;
 let driveLog = []; // 今回流れた文 {jp,en,g:null|"good"|"soso"|"bad"}
 let wakeLockRef = null, ssKeepAlive = null, voicesCache = [];
 const DRIVE_SRC = [ { id: "scene", label: "今のシーンの問題集" }, { id: "weak", label: "弱点デッキ" } ];
 const DRIVE_TIMERS = [ { s: 4, label: "4秒" }, { s: 6, label: "6秒" }, { s: 9, label: "9秒" } ];
+const DRIVE_EN_RATE = [ { r: 0.7, label: "ゆっくり" }, { r: 0.85, label: "やや遅め" }, { r: 0.95, label: "標準" }, { r: 1.15, label: "速め" } ];
 const DRIVE_VOICE = [ { id: true, label: "ON" }, { id: false, label: "OFF" } ];
 
 /* ---- 音声認識(評価用) ---- */
@@ -1031,6 +1035,9 @@ function renderDriveSetup() {
       it => { driveCfg.enVoiceURI = it.id; store.set("is_drive", driveCfg); });
     $("voiceHint").style.display = voiceScore(voices[0]) >= 80 ? "none" : "block";
   }
+  driveChips($("driveEnRateChips"), DRIVE_EN_RATE,
+    it => driveCfg.enRate === it.r,
+    it => { driveCfg.enRate = it.r; store.set("is_drive", driveCfg); });
 
   if (SR) {
     driveChips($("driveVoiceChips"), DRIVE_VOICE,
@@ -1047,7 +1054,7 @@ $("btnVoicePreview").onclick = () => {
   const u = new SpeechSynthesisUtterance("This place looks amazing. I can't wait to explore it.");
   const v = pickPreferredEnVoice();
   if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = 0.95;
+  u.rate = driveCfg.enRate;
   try { speechSynthesis.speak(u); } catch {}
 };
 $("btnDrive").onclick = () => {
@@ -1111,9 +1118,9 @@ async function driveLoop() {
     if (!driveOn) break;
     $("dEn").textContent = q.en;
     $("dPhase").textContent = "答え(2回流れます)";
-    await speak(q.en, "en", 0.95);
+    await speak(q.en, "en", driveCfg.enRate);
     await sleepCheck(500);
-    await speak(q.en, "en", 0.85);
+    await speak(q.en, "en", driveCfg.enRate);
     if (!driveOn) break;
     // ログ記録 + 音声評価
     let entry = driveLog.find(l => l.jp === q.jp);
