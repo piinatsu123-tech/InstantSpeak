@@ -309,6 +309,10 @@ details.keybox > div { margin-top: 10px; }
     <div class="chips" id="driveSrcChips"></div>
     <div class="label">考える時間(日本語のあと)</div>
     <div class="chips" id="driveTimerChips"></div>
+    <div class="label">英語の声</div>
+    <div class="chips" id="driveEnVoiceChips"></div>
+    <button class="btn btn-sub" id="btnVoicePreview" style="margin-top:0">🔊 試聴する</button>
+    <div class="note" id="voiceHint" style="display:none">この端末により流暢な音声を追加できます: 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「プレミアム」または「Enhanced」の声をダウンロードすると、ここで選べるようになります。</div>
     <div class="label">声で評価をつける</div>
     <div class="chips" id="driveVoiceChips"></div>
     <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
@@ -855,7 +859,8 @@ $("btnRetry").onclick = () => {
 $("btnHome").onclick = () => { renderSetup(); show("scrSetup"); };
 
 /* ================= drive mode (音声のみ・ハンズフリー) ================= */
-let driveCfg = store.get("is_drive", { src: "scene", timer: 6, voice: false });
+let driveCfg = store.get("is_drive", { src: "scene", timer: 6, voice: false, enVoiceURI: "auto" });
+if (!driveCfg.enVoiceURI) driveCfg.enVoiceURI = "auto"; // 旧バージョンの保存データを補完
 let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0;
 let driveLog = []; // 今回流れた文 {jp,en,g:null|"good"|"soso"|"bad"}
 let wakeLockRef = null, ssKeepAlive = null, voicesCache = [];
@@ -900,7 +905,11 @@ const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
 function loadVoices() {
   try {
     voicesCache = speechSynthesis.getVoices();
-    if (!voicesCache.length) speechSynthesis.onvoiceschanged = () => { try { voicesCache = speechSynthesis.getVoices(); } catch {} };
+    speechSynthesis.onvoiceschanged = () => {
+      try { voicesCache = speechSynthesis.getVoices(); } catch {}
+      // 声のダウンロードが遅れて後から出揃うことがあるため、設定画面が開いていれば再描画
+      if ($("scrDriveSetup").classList.contains("on")) renderDriveSetup();
+    };
   } catch {}
 }
 loadVoices();
@@ -909,6 +918,29 @@ function pickVoice(lang, prefer) {
       || voicesCache.find(v => v.lang && v.lang.startsWith(lang))
       || null;
 }
+// より流暢な声(プレミアム/Enhanced)を優先的にスコアリング
+const NATURAL_EN_NAMES = ["Ava", "Zoe", "Evan", "Nathan", "Nicky", "Aaron", "Isha", "Rocko", "Samantha", "Karen", "Daniel"];
+function voiceScore(v) {
+  const hay = ((v.voiceURI || "") + " " + (v.name || "")).toLowerCase();
+  let score = 0;
+  if (/premium/.test(hay)) score += 100;
+  if (/enhanced/.test(hay)) score += 80;
+  const ni = NATURAL_EN_NAMES.indexOf(v.name);
+  if (ni >= 0) score += 40 - ni; // リスト内の並び順も少し反映
+  return score;
+}
+function enVoices() {
+  return voicesCache
+    .filter(v => v.lang && v.lang.toLowerCase().startsWith("en"))
+    .sort((a, b) => voiceScore(b) - voiceScore(a) || a.name.localeCompare(b.name));
+}
+function pickPreferredEnVoice() {
+  if (driveCfg.enVoiceURI && driveCfg.enVoiceURI !== "auto") {
+    const chosen = voicesCache.find(v => v.voiceURI === driveCfg.enVoiceURI);
+    if (chosen) return chosen;
+  }
+  return enVoices()[0] || pickVoice("en", ["Samantha", "Karen", "Daniel"]);
+}
 async function speak(text, lang, rate) {
   // 一時停止中は発話を始めず、再開まで待つ
   while (drivePaused && driveOn) await new Promise(r => setTimeout(r, 200));
@@ -916,8 +948,8 @@ async function speak(text, lang, rate) {
     if (!driveOn) return res();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang === "ja" ? "ja-JP" : "en-US";
-    const v = lang === "ja" ? pickVoice("ja", ["Kyoko", "O-Ren"]) : pickVoice("en", ["Samantha", "Karen", "Daniel"]);
-    if (v) u.voice = v;
+    const v = lang === "ja" ? pickVoice("ja", ["Kyoko", "O-Ren"]) : pickPreferredEnVoice();
+    if (v) { u.voice = v; u.lang = v.lang; }
     u.rate = rate || 1;
     let done = false;
     const finish = () => { if (!done) { done = true; clearInterval(watch); res(); } };
@@ -983,6 +1015,23 @@ function renderDriveSetup() {
   driveChips($("driveTimerChips"), DRIVE_TIMERS,
     it => driveCfg.timer === it.s,
     it => { driveCfg.timer = it.s; store.set("is_drive", driveCfg); });
+
+  const voices = enVoices();
+  if (!voices.length) {
+    $("driveEnVoiceChips").innerHTML = '<span class="note" style="font-size:.8rem;color:var(--paper-dim)">英語の声を読み込み中…</span>';
+    $("voiceHint").style.display = "none";
+  } else {
+    const voiceItems = [{ id: "auto", label: "自動(おすすめ)" }].concat(voices.map(v => ({
+      id: v.voiceURI,
+      label: v.name,
+      tag: v.lang !== "en-US" ? v.lang : (voiceScore(v) >= 80 ? "高音質" : "")
+    })));
+    driveChips($("driveEnVoiceChips"), voiceItems,
+      it => (driveCfg.enVoiceURI || "auto") === it.id,
+      it => { driveCfg.enVoiceURI = it.id; store.set("is_drive", driveCfg); });
+    $("voiceHint").style.display = voiceScore(voices[0]) >= 80 ? "none" : "block";
+  }
+
   if (SR) {
     driveChips($("driveVoiceChips"), DRIVE_VOICE,
       it => driveCfg.voice === it.id,
@@ -992,6 +1041,15 @@ function renderDriveSetup() {
     driveCfg.voice = false;
   }
 }
+$("btnVoicePreview").onclick = () => {
+  try { voicesCache = speechSynthesis.getVoices(); } catch {}
+  try { speechSynthesis.cancel(); } catch {}
+  const u = new SpeechSynthesisUtterance("This place looks amazing. I can't wait to explore it.");
+  const v = pickPreferredEnVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = 0.95;
+  try { speechSynthesis.speak(u); } catch {}
+};
 $("btnDrive").onclick = () => {
   try { voicesCache = speechSynthesis.getVoices(); } catch {}
   renderDriveSetup();
