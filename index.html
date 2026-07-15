@@ -895,16 +895,23 @@ function classifyGrade(text) {
 }
 function gradeMark(g) { return g === "good" ? "◎" : g === "soso" ? "△" : g === "bad" ? "✗" : "−"; }
 
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+  || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 function loadVoices() {
-  voicesCache = speechSynthesis.getVoices();
-  if (!voicesCache.length) speechSynthesis.onvoiceschanged = () => { voicesCache = speechSynthesis.getVoices(); };
+  try {
+    voicesCache = speechSynthesis.getVoices();
+    if (!voicesCache.length) speechSynthesis.onvoiceschanged = () => { try { voicesCache = speechSynthesis.getVoices(); } catch {} };
+  } catch {}
 }
+loadVoices();
 function pickVoice(lang, prefer) {
   return voicesCache.find(v => prefer.some(p => v.name.includes(p)))
       || voicesCache.find(v => v.lang && v.lang.startsWith(lang))
       || null;
 }
-function speak(text, lang, rate) {
+async function speak(text, lang, rate) {
+  // 一時停止中は発話を始めず、再開まで待つ
+  while (drivePaused && driveOn) await new Promise(r => setTimeout(r, 200));
   return new Promise(res => {
     if (!driveOn) return res();
     const u = new SpeechSynthesisUtterance(text);
@@ -912,9 +919,22 @@ function speak(text, lang, rate) {
     const v = lang === "ja" ? pickVoice("ja", ["Kyoko", "O-Ren"]) : pickVoice("en", ["Samantha", "Karen", "Daniel"]);
     if (v) u.voice = v;
     u.rate = rate || 1;
-    u.onend = res;
-    u.onerror = res;
-    speechSynthesis.speak(u);
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearInterval(watch); res(); } };
+    u.onend = finish;
+    u.onerror = finish;
+    // iOSでonendが発火しない場合の保険:
+    // 発話が始まらない/止まったまま、または推定発話時間を超えたら次へ進む
+    let waited = 0;
+    const limit = Math.max(6000, text.length * 450);
+    const watch = setInterval(() => {
+      if (!driveOn) return finish();
+      if (drivePaused) return; // 一時停止中はカウントしない
+      waited += 300;
+      if (waited >= 900 && !speechSynthesis.speaking && !speechSynthesis.pending) finish();
+      if (waited >= limit) finish();
+    }, 300);
+    try { speechSynthesis.speak(u); } catch { finish(); }
   });
 }
 let audioCtx = null;
@@ -922,6 +942,7 @@ function beep() {
   return new Promise(res => {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
       o.frequency.value = 880; g.gain.value = 0.12;
       o.connect(g); g.connect(audioCtx.destination);
@@ -991,13 +1012,31 @@ $("btnDriveStart").onclick = async () => {
   driveLog = [];
   driveOn = true;
   drivePaused = false;
+  // ▼ iOSはユーザー操作の同期文脈内でしか音声を解錠できないため、
+  //    awaitを挟む前にここで音声合成とAudioContextを起こしておく
+  try {
+    speechSynthesis.cancel();
+    const unlock = new SpeechSynthesisUtterance(" ");
+    unlock.volume = 0;
+    speechSynthesis.speak(unlock);
+  } catch {}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch {}
   try { voicesCache = speechSynthesis.getVoices(); } catch {}
-  // 画面スリープ防止
-  try { wakeLockRef = await navigator.wakeLock.request("screen"); } catch {}
-  // iOS/Chromeの読み上げ停止バグ対策
-  ssKeepAlive = setInterval(() => { if (driveOn && !drivePaused) { speechSynthesis.pause(); speechSynthesis.resume(); } }, 10000);
+  // 読み上げ停止バグ対策(iOSはpause()で逆に固まるのでresume()のみ)
+  ssKeepAlive = setInterval(() => {
+    if (!driveOn || drivePaused) return;
+    try {
+      if (IS_IOS) speechSynthesis.resume();
+      else { speechSynthesis.pause(); speechSynthesis.resume(); }
+    } catch {}
+  }, 10000);
   show("scrDrive");
   driveLoop();
+  // 画面スリープ防止(音声開始後でよいのでawaitは最後に)
+  try { wakeLockRef = await navigator.wakeLock.request("screen"); } catch {}
 };
 
 async function driveLoop() {
@@ -1040,7 +1079,12 @@ async function driveLoop() {
 
 $("btnDrivePause").onclick = () => {
   drivePaused = !drivePaused;
-  if (drivePaused) speechSynthesis.pause(); else speechSynthesis.resume();
+  try {
+    // iOSはpause()/resume()が正しく動かないため、止める時はcancelで打ち切る
+    // (読み上げ中の文は次の再開時に進行が続く)
+    if (drivePaused) { if (IS_IOS) speechSynthesis.cancel(); else speechSynthesis.pause(); }
+    else if (!IS_IOS) speechSynthesis.resume();
+  } catch {}
   $("btnDrivePause").textContent = drivePaused ? "▶ 再開" : "⏸ 一時停止";
 };
 $("btnDriveStop").onclick = stopDrive;
