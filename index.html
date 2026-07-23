@@ -151,6 +151,7 @@ details.keybox > div { margin-top: 10px; }
 .loading .dots::after { content: "…"; animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
 .errbox { background: rgba(224,128,128,.12); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 16px; display: none; line-height: 1.6; }
+.okbox { background: rgba(127,200,169,.12); border: 1px solid var(--good); color: var(--good); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 12px; display: none; line-height: 1.6; }
 
 /* ---------- drive mode ---------- */
 .drive-card {
@@ -236,7 +237,10 @@ details.keybox > div { margin-top: 10px; }
       <button class="btn btn-sub" id="btnCopyPrompt" style="margin-top:0">① プロンプトをコピー → Claudeに貼る</button>
       <div class="label">② Claudeの返答(JSON)をここに貼り付け</div>
       <textarea id="pasteJson" placeholder='{"sentences":[...]}'></textarea>
-      <button class="btn btn-main" id="btnImport" style="margin-top:12px">③ 取り込んで開始</button>
+      <button class="btn btn-main" id="btnImport" style="margin-top:12px">③ 取り込んで開始(問題集にも保存)</button>
+      <button class="btn btn-sub" id="btnImportSave" style="margin-top:8px">📥 保存だけする(始めない)</button>
+      <div class="okbox" id="importMsg"></div>
+      <div class="note">保存した問題は選択中のシーンの問題集に追加され、次回から内蔵問題と一緒に出題されます。同じ日本語文は重複して追加されません。何度でも取り込んで増やせます。</div>
     </div>
 
     <button class="btn btn-sub" id="btnWeak" style="display:none">弱点デッキだけ復習 (<span id="weakCount">0</span>問)</button>
@@ -527,6 +531,7 @@ function renderSetup() {
 
   // モードごとの表示切替
   const isClaude = cfg.src === "claude";
+  $("importMsg").style.display = "none";
   $("claudeBox").style.display = isClaude ? "block" : "none";
   $("btnStart").style.display = isClaude ? "none" : "block";
   $("btnStart").textContent = cfg.src === "api" ? "10問ドリルを開始 (API生成)" : "10問ドリルを開始";
@@ -673,13 +678,50 @@ function parseSentences(text) {
   if (!filtered.length) throw new Error("sentencesが空です");
   return filtered;
 }
+function classifyLevel(en) {
+  // 英文の語数で自動判定 (s:〜7語 / m:8〜12語 / l:13語〜)
+  const n = (String(en).trim().match(/\S+/g) || []).length;
+  return n <= 7 ? "s" : n <= 12 ? "m" : "l";
+}
+function saveImported(sentences) {
+  // 選択中のシーン(cfg.scene)の問題集へ追記。日本語文が既存と重複するものはスキップ
+  const existing = new Set(effectiveBank().map(q => q.jp));
+  let added = 0, skipped = 0;
+  sentences.forEach(s => {
+    if (existing.has(s.jp)) { skipped++; return; }
+    custom.push({ s: cfg.scene, lv: classifyLevel(s.en), jp: s.jp, en: s.en, note: s.note || "" });
+    existing.add(s.jp);
+    added++;
+  });
+  if (added) store.set("is_custom", custom);
+  return { added, skipped };
+}
+function importResultMsg(added, skipped) {
+  if (added) return `「${SCENES[cfg.scene]}」に${added}問を保存しました` + (skipped ? `(重複${skipped}問はスキップ)` : "");
+  return `新しく保存できる問題はありませんでした(${skipped}問すべて重複)`;
+}
 $("btnImport").onclick = () => {
   $("errSetup").style.display = "none";
+  $("importMsg").style.display = "none";
   try {
-    drill = parseSentences($("pasteJson").value);
+    const sentences = parseSentences($("pasteJson").value);
+    saveImported(sentences);
+    drill = sentences.map(s => ({ jp: s.jp, en: s.en, note: s.note || "" }));
     drill.sceneName = $("customScene").value.trim() || SCENES[cfg.scene];
     $("pasteJson").value = "";
     startDrill();
+  } catch (e) { setupError("取り込みエラー: " + e.message); }
+};
+$("btnImportSave").onclick = () => {
+  $("errSetup").style.display = "none";
+  $("importMsg").style.display = "none";
+  try {
+    const sentences = parseSentences($("pasteJson").value);
+    const { added, skipped } = saveImported(sentences);
+    if (added) $("pasteJson").value = "";
+    const el = $("importMsg");
+    el.textContent = importResultMsg(added, skipped);
+    el.style.display = "block";
   } catch (e) { setupError("取り込みエラー: " + e.message); }
 };
 
