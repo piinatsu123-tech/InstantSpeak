@@ -318,7 +318,7 @@ details.keybox > div { margin-top: 10px; }
     <div class="label">英語の再生スピード</div>
     <div class="chips" id="driveEnRateChips"></div>
     <button class="btn btn-sub" id="btnVoicePreview" style="margin-top:0">🔊 試聴する</button>
-    <div class="note" id="voiceHint" style="display:none">この端末により流暢な音声を追加できます: 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「プレミアム」または「Enhanced」の声をダウンロードすると、ここで選べるようになります。</div>
+    <div class="note" id="voiceHint" style="display:none">より流暢な声を追加できます: iPhoneの 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「Ava(プレミアム)」などをダウンロードすると、ここに「プレミアム」タグ付きで表示され、選べるようになります。(反映されない場合はSafariを一度終了して開き直してください)</div>
     <div class="label">声で評価をつける</div>
     <div class="chips" id="driveVoiceChips"></div>
     <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
@@ -1010,11 +1010,18 @@ function pickVoice(lang, prefer) {
 }
 // より流暢な声(プレミアム/Enhanced)を優先的にスコアリング
 const NATURAL_EN_NAMES = ["Ava", "Zoe", "Evan", "Nathan", "Nicky", "Aaron", "Isha", "Rocko", "Samantha", "Karen", "Daniel"];
-function voiceScore(v) {
+function voiceTier(v) {
+  // iOSは同名の声(例:Ava)を品質別に複数返すことがある。voiceURIで判別する
   const hay = ((v.voiceURI || "") + " " + (v.name || "")).toLowerCase();
+  if (/premium/.test(hay)) return "プレミアム";
+  if (/enhanced/.test(hay)) return "高音質";
+  return "";
+}
+function voiceScore(v) {
   let score = 0;
-  if (/premium/.test(hay)) score += 100;
-  if (/enhanced/.test(hay)) score += 80;
+  const tier = voiceTier(v);
+  if (tier === "プレミアム") score += 100;
+  else if (tier === "高音質") score += 80;
   const ni = NATURAL_EN_NAMES.indexOf(v.name);
   if (ni >= 0) score += 40 - ni; // リスト内の並び順も少し反映
   return score;
@@ -1111,15 +1118,18 @@ function renderDriveSetup() {
     $("driveEnVoiceChips").innerHTML = '<span class="note" style="font-size:.8rem;color:var(--paper-dim)">英語の声を読み込み中…</span>';
     $("voiceHint").style.display = "none";
   } else {
-    const voiceItems = [{ id: "auto", label: "自動(おすすめ)" }].concat(voices.map(v => ({
-      id: v.voiceURI,
-      label: v.name,
-      tag: v.lang !== "en-US" ? v.lang : (voiceScore(v) >= 80 ? "高音質" : "")
-    })));
+    const voiceItems = [{ id: "auto", label: "自動(おすすめ)" }].concat(voices.map(v => {
+      const tier = voiceTier(v);
+      const region = v.lang && v.lang.toLowerCase() !== "en-us" ? v.lang.split("-")[1] : "";
+      // ティア(プレミアム/高音質)を優先。無ければ地域(GB等)。同名の声を見分けられるようにする
+      const tag = [tier, region].filter(Boolean).join(" · ");
+      return { id: v.voiceURI, label: v.name, tag };
+    }));
     driveChips($("driveEnVoiceChips"), voiceItems,
       it => (driveCfg.enVoiceURI || "auto") === it.id,
       it => { driveCfg.enVoiceURI = it.id; store.set("is_drive", driveCfg); });
-    $("voiceHint").style.display = voiceScore(voices[0]) >= 80 ? "none" : "block";
+    // プレミアム/高音質の声が1つも無ければダウンロード案内を出す
+    $("voiceHint").style.display = voices.some(v => voiceTier(v)) ? "none" : "block";
   }
   driveChips($("driveEnRateChips"), DRIVE_EN_RATE,
     it => driveCfg.enRate === it.r,
