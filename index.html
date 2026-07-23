@@ -621,13 +621,57 @@ function normalizeQuotes(s) {
     .replace(/[\u201C\u201D\u201E\u201F\u2033\uFF02]/g, '"')
     .replace(/[\u2018\u2019\u201A\u201B\u2032\uFF07]/g, "'");
 }
+function findJsonObject(text) {
+  // 最初の"{"から対応する"}"までを、文字列中の括弧やクォートを無視して正しく探す
+  // (末尾の会話文中に"}"が紛れ込んでいてもlastIndexOf方式より安全)
+  const startIdx = text.indexOf("{");
+  if (startIdx < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = startIdx; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth === 0) return text.slice(startIdx, i + 1); }
+  }
+  return null;
+}
+function unescapeJsonStr(s) {
+  return s.replace(/\\(["\\/bfnrt]|u[0-9a-fA-F]{4})/g, (m, esc) => {
+    if (esc[0] === "u") return String.fromCharCode(parseInt(esc.slice(1), 16));
+    return { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" }[esc];
+  });
+}
+function extractSentencesLoose(text) {
+  // JSON全体としては壊れていても、jp/en/note個々の文字列が正しくエスケープ
+  // されていれば拾えるフォールバック(末尾のゴミ文字や整形崩れへの保険)
+  const re = /"jp"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"en"\s*:\s*"((?:[^"\\]|\\.)*)"(?:\s*,\s*"note"\s*:\s*"((?:[^"\\]|\\.)*)")?/g;
+  const items = [];
+  let m;
+  while ((m = re.exec(text))) {
+    items.push({ jp: unescapeJsonStr(m[1]), en: unescapeJsonStr(m[2]), note: m[3] ? unescapeJsonStr(m[3]) : "" });
+  }
+  return items;
+}
 function parseSentences(text) {
   const clean = normalizeQuotes(text).replace(/```json|```/g, "").trim();
-  const start = clean.indexOf("{"), end = clean.lastIndexOf("}");
-  if (start < 0 || end < 0) throw new Error("JSONが見つかりません。Claudeの返答全体を貼ってください");
-  const parsed = JSON.parse(clean.slice(start, end + 1));
-  if (!parsed.sentences || !parsed.sentences.length) throw new Error("sentencesが空です");
-  return parsed.sentences.filter(q => q.jp && q.en);
+  const objText = findJsonObject(clean);
+  let sentences = null;
+  if (objText) {
+    try { sentences = JSON.parse(objText).sentences; }
+    catch {
+      try { sentences = JSON.parse(objText.replace(/,(\s*[\]}])/g, "$1")).sentences; } // 末尾カンマを除去して再試行
+      catch {}
+    }
+  }
+  if (!sentences || !sentences.length) sentences = extractSentencesLoose(clean);
+  if (!sentences || !sentences.length) throw new Error("JSONが見つかりません。Claudeの返答全体を貼ってください");
+  const filtered = sentences.filter(q => q.jp && q.en);
+  if (!filtered.length) throw new Error("sentencesが空です");
+  return filtered;
 }
 $("btnImport").onclick = () => {
   $("errSetup").style.display = "none";
