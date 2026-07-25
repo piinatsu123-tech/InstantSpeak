@@ -114,7 +114,7 @@ details.keybox > div { margin-top: 10px; }
   background: var(--ink-2); border: 1px solid var(--lamp-dim); border-radius: var(--radius);
   padding: 18px 16px;
 }
-.answer .tip { font-size: .83rem; color: var(--paper-dim); line-height: 1.7; margin-top: 10px; padding: 0 4px; text-align: left; }
+.answer .tip { font-size: .83rem; color: var(--paper-dim); line-height: 1.7; margin-top: 10px; padding: 0 4px; text-align: left; white-space: pre-line; }
 .grade { display: flex; gap: 8px; margin-top: 18px; }
 .grade button {
   flex: 1; border: none; border-radius: var(--radius); padding: 15px 4px;
@@ -347,7 +347,7 @@ details.keybox > div { margin-top: 10px; }
       <div class="label">英語</div>
       <textarea id="edEn" style="min-height:64px"></textarea>
       <div class="label">メモ(つまずきポイント)</div>
-      <input type="text" id="edNote">
+      <textarea id="edNote" style="min-height:64px"></textarea>
       <button class="btn btn-main" id="edSave">保存</button>
       <button class="btn btn-sub btn-danger" id="edDelete">この例文を削除</button>
       <button class="btn btn-sub" id="edCancel">キャンセル</button>
@@ -687,7 +687,7 @@ function buildCsv() {
   const misses = drill.filter((q, i) => results[i] === "hard");
   const esc = s => `"${String(s).replace(/"/g, '""')}"`;
   return misses.map(m => {
-    const back = m.en + (m.note ? `<br><span style='font-size:.85em;color:#888'>${m.note}</span>` : "");
+    const back = m.en + (m.note ? `<br><span style='font-size:.85em;color:#888'>${m.note.replace(/\n/g, "<br>")}</span>` : "");
     return `${esc(m.jp)},${esc(back)}`;
   }).join("\n");
 }
