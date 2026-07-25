@@ -186,6 +186,11 @@ details.keybox > div { margin-top: 10px; }
 .deck-item .dtag { float: right; font-size: .68rem; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 6px; padding: 2px 6px; }
 .deck-item .dcheck { float: right; margin-left: 10px; width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: 1rem; cursor: pointer; }
 .deck-item .dcheck.on { border-color: var(--soso); color: var(--soso); background: rgba(232,196,104,.13); }
+.deck-item .dnum { color: var(--lamp-dim); font-family: var(--ui); font-size: .8rem; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.deck-item .dgrp { display: inline-block; margin-top: 8px; font-size: .68rem; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 6px; padding: 2px 7px; }
+.deck-item .dfoot { display: flex; gap: 6px; margin-top: 9px; }
+.deck-item .dmove { width: 44px; height: 30px; border-radius: 8px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: .9rem; cursor: pointer; }
+.deck-item .dmove:disabled { opacity: .3; }
 .deck-count { font-size: .75rem; color: var(--paper-dim); margin: 6px 2px 10px; }
 .weak-item .wedit {
   float: right; background: none; border: 1px solid var(--ink-3); color: var(--paper-dim);
@@ -218,6 +223,9 @@ details.keybox > div { margin-top: 10px; }
   <!-- ======== HOME ======== -->
   <div class="screen on" id="scrSetup">
     <div class="deck-count" id="homeCount"></div>
+
+    <div class="label" id="scopeLabel" style="display:none">出題範囲</div>
+    <div class="chips" id="scopeChips"></div>
 
     <div class="label">考える時間</div>
     <div class="chips" id="timerChips"></div>
@@ -281,6 +289,8 @@ details.keybox > div { margin-top: 10px; }
 
   <!-- ======== DRIVE SETUP ======== -->
   <div class="screen" id="scrDriveSetup">
+    <div class="label" id="driveGrpLabel" style="display:none">長文フォルダ</div>
+    <div class="chips" id="driveGrpChips"></div>
     <div class="label">音声で流す問題</div>
     <div class="chips" id="driveSrcChips"></div>
     <div class="label">考える時間(日本語のあと)</div>
@@ -294,7 +304,7 @@ details.keybox > div { margin-top: 10px; }
     <div class="label">声で評価をつける</div>
     <div class="chips" id="driveVoiceChips"></div>
     <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
-    <div class="note">運転前にスタートしてください。止めるまでシャッフルでエンドレスに流れます。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
+    <div class="note">運転前にスタートしてください。止めるまでエンドレスに流れます(長文フォルダを選ぶと順番どおり、全フォルダならシャッフル)。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
     <button class="btn btn-main btn-huge" id="btnDriveStart">▶ 再生開始</button>
     <button class="btn btn-sub" id="btnDriveBack">ホームへ</button>
     <div class="errbox" id="errDrive"></div>
@@ -327,12 +337,15 @@ details.keybox > div { margin-top: 10px; }
     <button class="btn btn-main" id="btnAddSent">＋ 問題を1つ追加</button>
 
     <details class="keybox" id="pasteBox">
-      <summary>まとめて貼り付けで追加(JSON)</summary>
+      <summary>長文をまとめて追加(JSON)</summary>
       <div>
+        <div class="label" style="margin-top:4px">フォルダ名(長文のタイトル・空欄なら未分類)</div>
+        <input type="text" id="pasteGrp" placeholder="例: Part7 第3問 求人メール">
+        <div class="label">JSON</div>
         <textarea id="pasteJson" placeholder='{"sentences":[{"jp":"日本語","en":"English","note":"メモ"}]}'></textarea>
         <button class="btn btn-sub" id="btnImportSave" style="margin-top:10px">📥 まとめて追加する</button>
         <div class="okbox" id="importMsg"></div>
-        <div class="note">ChatGPTやClaudeに「間違えた英文を瞬間英作文カードにして。{"sentences":[{"jp":"日本語","en":"English","note":"メモ"}]} の形式のJSONだけで返して」と頼み、返ってきたJSONを貼り付けてもOK。同じ日本語文は重複追加されません。</div>
+        <div class="note">フォルダ名を付けると、その長文の文が<b>貼り付けた順番のまま</b>1つのフォルダにまとまり、ホームの「出題範囲」から順番どおりに練習できます。ChatGPTやClaudeに「この長文を瞬間英作文カードに分けて。{"sentences":[{"jp":"日本語","en":"English","note":"メモ"}]} の形式のJSONだけで返して」と頼み、返ってきたJSONを貼り付けるのが簡単です。同じフォルダ内の同じ日本語文は重複追加されません。</div>
       </div>
     </details>
 
@@ -348,6 +361,9 @@ details.keybox > div { margin-top: 10px; }
       <textarea id="edEn" style="min-height:64px"></textarea>
       <div class="label">メモ(つまずきポイント)</div>
       <textarea id="edNote" style="min-height:64px"></textarea>
+      <div class="label">フォルダ(長文のタイトル・空欄なら未分類)</div>
+      <input type="text" id="edGrp" list="grpList" placeholder="例: Part7 第3問 求人メール">
+      <datalist id="grpList"></datalist>
       <button class="btn btn-main" id="edSave">保存</button>
       <button class="btn btn-sub btn-danger" id="edDelete">この例文を削除</button>
       <button class="btn btn-sub" id="edCancel">キャンセル</button>
@@ -367,34 +383,46 @@ const store = {
 /* ================= state ================= */
 const TIMERS = [ { s: 5, label: "5秒" }, { s: 8, label: "8秒" }, { s: 12, label: "12秒" }, { s: 0, label: "なし" } ];
 
-let cfg = store.get("is_cfg", { timer: 8 });
+let cfg = store.get("is_cfg", { timer: 8, scope: "" });
 if (typeof cfg.timer !== "number") cfg.timer = 8;
+if (typeof cfg.scope !== "string") cfg.scope = "";   // 出題範囲: "" = すべて / フォルダ名
 
-// deck: ユーザーが取り込んだ自作カードだけの一次元リスト {jp,en,note,hard}
+// deck: ユーザーが取り込んだ自作カードだけの一次元リスト {jp,en,note,hard,grp}
 // hard=true が「わからなかった/要復習」チェック済み
+// grp  = フォルダ名(長文のタイトルなど)。"" は未分類。同じフォルダ内は配列順=長文の順番
 let deck = migrateDeck();
 function migrateDeck() {
   const existing = store.get("is_deck", null);
-  if (existing) return existing.map(c => ({ jp: c.jp, en: c.en, note: c.note || "", hard: !!c.hard }));
+  if (existing) return existing.map(c => ({ jp: c.jp, en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "" }));
   // 旧バージョン(シーン制)からの一度きりの移行: custom + weak を平坦化して引き継ぐ
   const out = [];
   const seen = new Set();
   (store.get("is_custom", [])).forEach(c => {
-    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false }); seen.add(c.jp); }
+    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false, grp: "" }); seen.add(c.jp); }
   });
   (store.get("is_weak", [])).forEach(w => {
     if (!w.jp || !w.en) return;
     const ex = out.find(d => d.jp === w.jp);
     if (ex) ex.hard = true;
-    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true }); seen.add(w.jp); }
+    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true, grp: "" }); seen.add(w.jp); }
   });
   store.set("is_deck", out);
   return out;
 }
 function saveDeck() { store.set("is_deck", deck); }
 
+/* ---- フォルダ(長文単位)のヘルパー ---- */
+function groupNames() {
+  // 登録順のフォルダ名一覧(重複なし)
+  const out = [];
+  deck.forEach(c => { const g = c.grp || ""; if (g && !out.includes(g)) out.push(g); });
+  return out;
+}
+function cardsInGroup(g) { return deck.filter(c => (c.grp || "") === g); }
+function scopeCards() { return cfg.scope ? cardsInGroup(cfg.scope) : deck.slice(); }
+
 let history  = store.get("is_hist", []);     // {date,total,good}
-let deckFilter = "all";                       // 問題集画面のフィルタ "all" | "hard"
+let deckFilter = "all";                       // 問題集画面のフィルタ "all" | "hard" | "g:<フォルダ名>"
 let editTarget = null;                        // 編集対象 {type, ...}
 let drill = [];                               // deck内カードへの参照配列
 let results = [];
@@ -417,12 +445,27 @@ function hardCount() { return deck.filter(c => c.hard).length; }
 function renderSetup() {
   chips($("timerChips"), TIMERS, it => cfg.timer === it.s, it => { cfg.timer = it.s; save(); });
 
-  const total = deck.length, hc = hardCount();
+  // 出題範囲(フォルダ)。フォルダが1つも無ければ行ごと隠す
+  const groups = groupNames();
+  if (cfg.scope && !groups.includes(cfg.scope)) { cfg.scope = ""; save(); } // 消えたフォルダは解除
+  const hasGroups = groups.length > 0;
+  $("scopeLabel").style.display = hasGroups ? "block" : "none";
+  if (hasGroups) {
+    const items = [{ id: "", label: `すべて (${deck.length})` }]
+      .concat(groups.map(g => ({ id: g, label: `📁 ${g} (${cardsInGroup(g).length})` })));
+    chips($("scopeChips"), items, it => cfg.scope === it.id, it => { cfg.scope = it.id; save(); });
+  } else $("scopeChips").innerHTML = "";
+
+  const pool = scopeCards();
+  const total = deck.length, hc = pool.filter(c => c.hard).length;
   $("homeCount").textContent = total
-    ? `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}`
+    ? (cfg.scope
+        ? `📁 ${cfg.scope} — ${pool.length}問を順番どおりに出題${hc ? ` ・ チェック中 ${hc}問` : ""}`
+        : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}`)
     : "まだ問題がありません。「問題を追加・編集する」から登録してください。";
-  $("btnStart").disabled = total === 0;
-  $("btnStart").textContent = total ? "瞬間英作文を始める" : "問題を追加してください";
+  $("btnStart").disabled = pool.length === 0;
+  $("btnStart").textContent = !total ? "問題を追加してください"
+    : cfg.scope ? "この長文を順番に始める" : "瞬間英作文を始める";
   $("hardCount").textContent = hc;
   $("btnHard").style.display = hc > 0 ? "block" : "none";
   $("errSetup").style.display = "none";
@@ -509,31 +552,34 @@ function parseSentences(text) {
   if (!filtered.length) throw new Error("sentencesが空です");
   return filtered;
 }
-function saveImported(sentences) {
-  // デッキへ追記。日本語文が既存と重複するものはスキップ
-  const existing = new Set(deck.map(c => c.jp));
+function saveImported(sentences, grp) {
+  // 指定フォルダへ貼り付け順のまま追記。同じフォルダ内で重複する日本語文はスキップ
+  const g = (grp || "").trim();
+  const existing = new Set(cardsInGroup(g).map(c => c.jp));
   let added = 0, skipped = 0;
   sentences.forEach(s => {
     if (existing.has(s.jp)) { skipped++; return; }
-    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false });
+    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false, grp: g });
     existing.add(s.jp);
     added++;
   });
   if (added) saveDeck();
   return { added, skipped };
 }
-function importResultMsg(added, skipped) {
-  if (added) return `${added}問を追加しました` + (skipped ? `(重複${skipped}問はスキップ)` : "");
+function importResultMsg(added, skipped, grp) {
+  const where = grp ? `📁 ${grp} に` : "";
+  if (added) return `${where}${added}問を追加しました` + (skipped ? `(重複${skipped}問はスキップ)` : "");
   return `新しく追加できる問題はありませんでした(${skipped}問すべて重複)`;
 }
 $("btnImportSave").onclick = () => {
   $("importMsg").style.display = "none";
   try {
+    const grp = $("pasteGrp").value.trim();
     const sentences = parseSentences($("pasteJson").value);
-    const { added, skipped } = saveImported(sentences);
-    if (added) $("pasteJson").value = "";
+    const { added, skipped } = saveImported(sentences, grp);
+    if (added) { $("pasteJson").value = ""; if (grp) deckFilter = "g:" + grp; }
     const el = $("importMsg");
-    el.textContent = importResultMsg(added, skipped);
+    el.textContent = importResultMsg(added, skipped, grp);
     el.style.display = "block";
     renderDeck();
   } catch (e) {
@@ -548,16 +594,18 @@ $("btnImportSave").onclick = () => {
 $("btnStart").onclick = () => {
   $("errSetup").style.display = "none";
   if (!deck.length) { setupError("先に「問題を追加・編集する」から問題を登録してください"); return; }
-  drill = deck.slice();
-  shuffle(drill);
+  const pool = scopeCards();
+  if (!pool.length) { setupError("このフォルダに問題がありません"); return; }
+  drill = pool.slice();
+  if (!cfg.scope) shuffle(drill);  // フォルダ指定時は長文の順番どおりに出題
   drill.mode = "all";
   startDrill();
 };
 $("btnHard").onclick = () => {
-  const hard = deck.filter(c => c.hard);
+  const hard = scopeCards().filter(c => c.hard);
   if (!hard.length) { setupError("チェックした問題がありません"); return; }
   drill = hard.slice();
-  shuffle(drill);
+  if (!cfg.scope) shuffle(drill);
   drill.mode = "hard";
   startDrill();
 };
@@ -726,7 +774,8 @@ if (!driveCfg.enVoiceURI) driveCfg.enVoiceURI = "auto"; // 旧バージョンの
 if (!driveCfg.enRate) driveCfg.enRate = 0.95;
 if (driveCfg.src === "scene") driveCfg.src = "all";   // 旧シーン制からの移行
 if (driveCfg.src === "weak") driveCfg.src = "hard";
-let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0;
+if (typeof driveCfg.grp !== "string") driveCfg.grp = "";  // "" = フォルダ問わず全部
+let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0, driveOrdered = false;
 let driveLog = []; // 今回流れた文 {jp,en,g:null|"good"|"soso"|"bad"}
 let wakeLockRef = null, ssKeepAlive = null, voicesCache = [];
 const DRIVE_SRC = [ { id: "all", label: "全部" }, { id: "hard", label: "チェックした問題だけ" } ];
@@ -882,6 +931,18 @@ function driveChips(el, items, getSel, onSel) {
   });
 }
 function renderDriveSetup() {
+  // 長文フォルダの選択(フォルダが無ければ行ごと隠す)
+  const groups = groupNames();
+  if (driveCfg.grp && !groups.includes(driveCfg.grp)) { driveCfg.grp = ""; store.set("is_drive", driveCfg); }
+  $("driveGrpLabel").style.display = groups.length ? "block" : "none";
+  if (groups.length) {
+    const items = [{ id: "", label: "全フォルダ" }]
+      .concat(groups.map(g => ({ id: g, label: `📁 ${g}`, tag: "順番" })));
+    driveChips($("driveGrpChips"), items,
+      it => driveCfg.grp === it.id,
+      it => { driveCfg.grp = it.id; store.set("is_drive", driveCfg); });
+  } else $("driveGrpChips").innerHTML = "";
+
   driveChips($("driveSrcChips"), DRIVE_SRC,
     it => driveCfg.src === it.id,
     it => { driveCfg.src = it.id; store.set("is_drive", driveCfg); });
@@ -938,7 +999,8 @@ $("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
 
 $("btnDriveStart").onclick = async () => {
   $("errDrive").style.display = "none";
-  const pool = driveCfg.src === "hard" ? deck.filter(c => c.hard) : deck;
+  let pool = driveCfg.grp ? cardsInGroup(driveCfg.grp) : deck.slice();
+  if (driveCfg.src === "hard") pool = pool.filter(c => c.hard);
   if (!pool.length) {
     $("errDrive").textContent = driveCfg.src === "hard"
       ? "チェックした問題がありません。「全部」を選ぶか、先にドリルでチェックをどうぞ"
@@ -946,8 +1008,11 @@ $("btnDriveStart").onclick = async () => {
     $("errDrive").style.display = "block";
     return;
   }
-  driveQueue = pool.map(({ jp, en }) => ({ jp, en }));
-  shuffle(driveQueue);
+  // カード参照を持たせる(同じ日本語文が別フォルダにもあり得るため、
+  //  降車後の評価を正しいカードへ返せるようにする)
+  driveQueue = pool.map(c => ({ jp: c.jp, en: c.en, card: c }));
+  driveOrdered = !!driveCfg.grp;          // フォルダ指定時は長文の順番どおりに流す
+  if (!driveOrdered) shuffle(driveQueue);
   driveIdx = 0;
   driveLog = [];
   driveOn = true;
@@ -998,8 +1063,8 @@ async function driveLoop() {
     await speak(q.en, "en", driveCfg.enRate);
     if (!driveOn) break;
     // ログ記録 + 音声評価
-    let entry = driveLog.find(l => l.jp === q.jp);
-    if (!entry) { entry = { jp: q.jp, en: q.en, g: null }; driveLog.push(entry); }
+    let entry = driveLog.find(l => l.card === q.card);
+    if (!entry) { entry = { jp: q.jp, en: q.en, card: q.card, g: null }; driveLog.push(entry); }
     if (driveCfg.voice && SR) {
       await beep(); await beep();
       $("dPhase").textContent = "評価: できた / むずかしい / できなかった";
@@ -1013,7 +1078,7 @@ async function driveLoop() {
     }
     await sleepCheck(1200);
     driveIdx++;
-    if (driveIdx >= driveQueue.length) { shuffle(driveQueue); driveIdx = 0; } // エンドレス
+    if (driveIdx >= driveQueue.length) { if (!driveOrdered) shuffle(driveQueue); driveIdx = 0; } // エンドレス
   }
 }
 
@@ -1059,7 +1124,7 @@ function renderDriveLog() {
 }
 $("btnLogSave").onclick = () => {
   driveLog.forEach(l => {
-    const card = deck.find(c => c.jp === l.jp);
+    const card = l.card && deck.includes(l.card) ? l.card : deck.find(c => c.jp === l.jp);
     if (!card) return;
     if (l.g === "soso" || l.g === "bad") card.hard = true;   // △✗はチェックを付ける
     else if (l.g === "good") card.hard = false;              // ◎はチェックを外す(卒業)
@@ -1075,10 +1140,24 @@ $("btnLogSkip").onclick = () => { driveLog = []; renderSetup(); show("scrSetup")
 $("btnDeck").onclick = () => { deckFilter = "all"; $("importMsg").style.display = "none"; renderDeck(); show("scrDeck"); };
 $("btnDeckHome").onclick = () => { renderSetup(); show("scrSetup"); };
 
+function deckFilterGroup() {
+  // フォルダ表示中ならそのフォルダ名("" = 未分類)、それ以外は null
+  return deckFilter.startsWith("g:") ? deckFilter.slice(2) : null;
+}
+function deckPool() {
+  const g = deckFilterGroup();
+  if (g !== null) return cardsInGroup(g);
+  if (deckFilter === "hard") return deck.filter(c => c.hard);
+  return deck.slice();
+}
 function renderDeckFilterChips() {
   const el = $("deckFilterChips");
   el.innerHTML = "";
+  const groups = groupNames();
   const items = [{ id: "all", label: `すべて (${deck.length})` }, { id: "hard", label: `チェックのみ (${hardCount()})` }];
+  groups.forEach(g => items.push({ id: "g:" + g, label: `📁 ${g} (${cardsInGroup(g).length})` }));
+  const un = cardsInGroup("").length;
+  if (groups.length && un) items.push({ id: "g:", label: `未分類 (${un})` });
   items.forEach(it => {
     const b = document.createElement("button");
     b.className = "chip" + (deckFilter === it.id ? " sel" : "");
@@ -1087,15 +1166,29 @@ function renderDeckFilterChips() {
     el.appendChild(b);
   });
 }
+function moveCard(card, dir) {
+  // 同じフォルダ内での並べ替え(長文の順番を直す)
+  const sib = cardsInGroup(card.grp || "");
+  const pos = sib.indexOf(card);
+  const swapWith = sib[pos + dir];
+  if (!swapWith) return;
+  const i = deck.indexOf(card), j = deck.indexOf(swapWith);
+  [deck[i], deck[j]] = [deck[j], deck[i]];
+  saveDeck();
+  renderDeck();
+}
 function renderDeck() {
   renderDeckFilterChips();
-  const pool = deckFilter === "hard" ? deck.filter(c => c.hard) : deck;
+  const pool = deckPool();
+  const inGroup = deckFilterGroup();
   $("deckCount").textContent = deck.length
-    ? `${pool.length}問 ・ ○/✓でチェック切替、文をタップで編集`
+    ? (inGroup !== null
+        ? `${pool.length}問 ・ この順番で出題されます(↑↓で並べ替え)`
+        : `${pool.length}問 ・ ○/✓でチェック切替、文をタップで編集`)
     : "問題がありません。下の「＋ 問題を1つ追加」から登録してください。";
   const list = $("deckList");
   list.innerHTML = "";
-  pool.forEach(card => {
+  pool.forEach((card, i) => {
     const d = document.createElement("div");
     d.className = "deck-item";
     d.innerHTML = `<button class="dcheck">${card.hard ? "✓" : "○"}</button>
@@ -1105,13 +1198,38 @@ function renderDeck() {
     const chk = d.querySelector(".dcheck");
     if (card.hard) chk.classList.add("on");
     chk.onclick = e => { e.stopPropagation(); card.hard = !card.hard; saveDeck(); renderDeck(); };
+    if (inGroup !== null) {
+      // フォルダ表示中: 順番を示す番号と並べ替えボタン
+      const num = document.createElement("span");
+      num.className = "dnum";
+      num.textContent = (i + 1) + ".";
+      d.querySelector(".djp").prepend(num);
+      const foot = document.createElement("div");
+      foot.className = "dfoot";
+      [["↑", -1], ["↓", 1]].forEach(([sym, dir]) => {
+        const mb = document.createElement("button");
+        mb.className = "dmove";
+        mb.textContent = sym;
+        mb.disabled = dir < 0 ? i === 0 : i === pool.length - 1;
+        mb.onclick = e => { e.stopPropagation(); moveCard(card, dir); };
+        foot.appendChild(mb);
+      });
+      d.appendChild(foot);
+    } else if (card.grp) {
+      // 全件表示中: どのフォルダの文か分かるようタグを出す
+      const tag = document.createElement("span");
+      tag.className = "dgrp";
+      tag.textContent = "📁 " + card.grp;
+      d.appendChild(tag);
+    }
     d.onclick = () => openEditor({ type: "card", card }, card);
     list.appendChild(d);
   });
 }
 
 $("btnAddSent").onclick = () => {
-  openEditor({ type: "new" }, { jp: "", en: "", note: "" });
+  const g = deckFilterGroup();
+  openEditor({ type: "new" }, { jp: "", en: "", note: "", grp: g === null ? "" : g });
 };
 
 function openEditor(target, q) {
@@ -1119,6 +1237,11 @@ function openEditor(target, q) {
   $("edJp").value = q.jp;
   $("edEn").value = q.en;
   $("edNote").value = q.note || "";
+  $("edGrp").value = q.grp || "";
+  // 既存フォルダ名を入力候補に出す
+  const dl = $("grpList");
+  dl.innerHTML = "";
+  groupNames().forEach(g => { const o = document.createElement("option"); o.value = g; dl.appendChild(o); });
   $("edDelete").style.display = target.type === "new" ? "none" : "block";
   $("editModalBg").classList.add("on");
 }
@@ -1127,14 +1250,24 @@ $("edCancel").onclick = closeEditor;
 $("editModalBg").onclick = e => { if (e.target === $("editModalBg")) closeEditor(); };
 
 $("edSave").onclick = () => {
-  const q = { jp: $("edJp").value.trim(), en: $("edEn").value.trim(), note: $("edNote").value.trim() };
+  const q = {
+    jp: $("edJp").value.trim(), en: $("edEn").value.trim(),
+    note: $("edNote").value.trim(), grp: $("edGrp").value.trim()
+  };
   if (!q.jp || !q.en) return;
   const t = editTarget;
   if (t.type === "new") {
-    if (deck.some(c => c.jp === q.jp)) { closeEditor(); renderDeck(); return; } // 重複はスキップ
+    // 同じフォルダ内で同じ日本語文があればスキップ
+    if (cardsInGroup(q.grp).some(c => c.jp === q.jp)) { closeEditor(); renderDeck(); return; }
     deck.push({ ...q, hard: false });
   } else if (t.type === "card") {
     t.card.jp = q.jp; t.card.en = q.en; t.card.note = q.note;
+    if ((t.card.grp || "") !== q.grp) {
+      // フォルダを移動した場合は移動先の末尾へ回す(順番を保つため)
+      t.card.grp = q.grp;
+      const i = deck.indexOf(t.card);
+      if (i >= 0) { deck.splice(i, 1); deck.push(t.card); }
+    }
   }
   saveDeck();
   closeEditor();
