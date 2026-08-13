@@ -175,18 +175,7 @@ details.keybox > div { margin-top: 10px; }
 .log-item .len { font-size: .85rem; color: var(--lamp); }
 .log-item .lmark { font-size: 1.3rem; width: 1.6em; text-align: center; flex-shrink: 0; }
 
-/* ---------- dictation ---------- */
-.dic-card {
-  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 20px;
-  padding: 24px 20px; text-align: center;
-}
-.dic-phase { font-size: .78rem; color: var(--paper-dim); letter-spacing: .08em; }
-.dic-btns { display: flex; gap: 8px; margin-top: 16px; }
-.dic-btns button {
-  flex: 1; border-radius: var(--radius); padding: 14px 4px; font-size: .95rem; font-weight: 600;
-  font-family: var(--ui); cursor: pointer; background: var(--ink-2); color: var(--paper); border: 1px solid var(--ink-3);
-}
-.dic-btns button:active { transform: scale(.97); }
+/* ---------- 書き取りの答え合わせ表示 ---------- */
 .dic-diff {
   font-size: 1.05rem; line-height: 2; text-align: left; margin-top: 14px;
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius); padding: 16px 15px;
@@ -194,15 +183,31 @@ details.keybox > div { margin-top: 10px; }
 .dic-diff .w-ok { color: var(--paper); }
 .dic-diff .w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
 .dic-diff .w-extra { color: var(--paper-dim); text-decoration: line-through; opacity: .7; }
-.dic-answer { font-size: 1.05rem; font-weight: 700; color: var(--lamp); line-height: 1.6; margin-top: 12px; text-align: left; }
 .dic-score { font-size: .85rem; margin-top: 10px; color: var(--paper-dim); }
 .dic-score b { font-size: 1.35rem; color: var(--lamp); font-variant-numeric: tabular-nums; }
 .dic-legend { font-size: .72rem; color: var(--paper-dim); margin-top: 8px; line-height: 1.7; }
 
-/* ---------- import (長文の取り込み) ---------- */
-#chunkBox { min-height: 180px; font-size: 15px; line-height: 1.9; }
+/* ---------- import (書き取り→答え合わせ→登録) ---------- */
+#chunkBox, #jpChunkBox { min-height: 150px; font-size: 15px; line-height: 1.9; }
 .step-btn { background: rgba(240,168,104,.13); color: var(--lamp); border: 1px solid var(--lamp-dim); }
-.chunk-count { font-size: .75rem; color: var(--paper-dim); margin-top: 8px; }
+.chunk-count { font-size: .78rem; margin-top: 10px; }
+.chunk-count.bad { color: var(--bad); }
+.chunk-count.ok { color: var(--good); }
+.step-head {
+  margin: 26px 0 10px; font-size: .95rem; font-weight: 700; color: var(--lamp);
+  border-top: 1px solid var(--ink-3); padding-top: 18px;
+}
+.pair-list { margin-top: 12px; }
+.pair-item {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
+  padding: 11px 13px; margin-bottom: 7px; font-size: .85rem;
+}
+.pair-item.miss { border-color: var(--bad); }
+.pair-item .pn { color: var(--lamp-dim); font-size: .75rem; font-variant-numeric: tabular-nums; margin-right: 6px; }
+.pair-item .pen { color: var(--lamp); margin-bottom: 4px; }
+.pair-item .pjp { font-family: var(--jp-serif); }
+.pair-item .pjp.empty { color: var(--bad); }
+.pair-item .phard { float: right; font-size: .7rem; color: var(--soso); border: 1px solid var(--soso); border-radius: 6px; padding: 1px 6px; }
 
 /* ---------- deck editor ---------- */
 .deck-item {
@@ -259,9 +264,8 @@ details.keybox > div { margin-top: 10px; }
     <div class="label">考える時間(瞬間英作文)</div>
     <div class="chips" id="timerChips"></div>
 
-    <button class="btn btn-main step-btn" id="btnImportScreen" style="margin-top:22px">① 長文を貼って区切る</button>
-    <button class="btn btn-sub" id="btnDic">② ディクテーション<span id="dicCount"></span></button>
-    <button class="btn btn-main" id="btnStart" style="margin-top:10px">③ 瞬間英作文を始める</button>
+    <button class="btn btn-main step-btn" id="btnImportScreen" style="margin-top:22px">✍️ 書き取り → 答え合わせ → 登録</button>
+    <button class="btn btn-main" id="btnStart" style="margin-top:10px">瞬間英作文を始める</button>
     <button class="btn btn-sub" id="btnHard" style="display:none">✓ チェックした問題だけ (<span id="hardCount">0</span>問)</button>
     <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:10px">🚗 ドライブモード(音声のみ)</button>
     <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
@@ -271,23 +275,42 @@ details.keybox > div { margin-top: 10px; }
     <div class="note" id="jpWarn" style="display:none"></div>
   </div>
 
-  <!-- ======== IMPORT (長文を貼って区切る) ======== -->
+  <!-- ======== IMPORT (書き取り → 答え合わせ → 登録) ======== -->
   <div class="screen" id="scrImport">
     <div class="label">長文のタイトル(フォルダ名)</div>
     <input type="text" id="impGrp" placeholder="例: Part4 空港アナウンス">
 
-    <div class="label">英文をまるごと貼り付け</div>
-    <textarea id="impText" placeholder="Attention passengers. Flight 402 to Chicago has been delayed due to weather conditions. We expect to begin boarding at 3:30 p.m. ..."></textarea>
+    <div class="step-head">① 聞き取った英文を打ち込む</div>
+    <div class="note">手持ちの音声を聞きながら書き取ってください。答え合わせをしない場合は空でもOKです。</div>
+    <textarea id="dicAttempt" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="attention passengers flight 402 to chicago has been delayed..."></textarea>
 
-    <div class="label">区切り方</div>
+    <div class="step-head">② 正解の英文を入れて答え合わせ</div>
+    <textarea id="impText" placeholder="Attention passengers. Flight 402 to Chicago has been delayed due to severe weather conditions, and we now expect to begin boarding at 3:30 p.m."></textarea>
+    <button class="btn btn-sub" id="btnCheckDic" style="margin-top:12px">🔍 答え合わせする</button>
+    <div id="dicResultBox" style="display:none">
+      <div class="dic-diff" id="dicDiff"></div>
+      <div class="dic-legend">赤い下線 = 書き取れなかった語 / 取り消し線 = 余分に書いた語</div>
+      <div class="dic-score" id="dicScoreLine"></div>
+      <div class="note">書き取れなかった語を含む問題には、登録時に自動で「✓チェック(要復習)」が付きます。</div>
+    </div>
+
+    <div class="step-head">③ 日本語訳を入れる</div>
+    <div class="note">全文をそのまま貼ってもOK(句点で自動的に区切ります)。1行に1つずつ書けば、その区切りがそのまま使われます。</div>
+    <textarea id="jpText" placeholder="ご搭乗のみなさまにお知らせします。シカゴ行き402便は悪天候のため遅れております。搭乗開始は3時半を予定しております。"></textarea>
+
+    <div class="step-head">④ 文章を区切る</div>
+    <div class="label">英文の区切り方</div>
     <div class="chips" id="impModeChips"></div>
-    <button class="btn btn-sub" id="btnSplit" style="margin-top:12px">✂ 区切ってみる</button>
+    <button class="btn btn-sub" id="btnSplit" style="margin-top:12px">✂ 区切る</button>
 
     <div id="impPreviewBox" style="display:none">
-      <div class="label">区切り結果 — 1行=1問。改行で分ける・つなげて1行にすれば結合できます</div>
+      <div class="label">英文(1行=1問) — 改行で分ける・つなげて結合</div>
       <textarea id="chunkBox"></textarea>
+      <div class="label">日本語(1行=1問) — 英文と同じ行数・同じ順番に</div>
+      <textarea id="jpChunkBox"></textarea>
       <div class="chunk-count" id="chunkCount"></div>
-      <button class="btn btn-main" id="btnSaveChunks">この区切りで保存する</button>
+      <div class="pair-list" id="pairList"></div>
+      <button class="btn btn-main" id="btnSaveChunks">⑤ 瞬間英作文として登録する</button>
     </div>
 
     <details class="keybox" id="transBox">
@@ -307,44 +330,6 @@ details.keybox > div { margin-top: 10px; }
     <button class="btn btn-sub" id="btnImportHome">ホームへ</button>
     <div class="errbox" id="errImport"></div>
     <div class="okbox" id="impMsg"></div>
-  </div>
-
-  <!-- ======== DICTATION ======== -->
-  <div class="screen" id="scrDic">
-    <div class="progress" id="dicProg"></div>
-    <div class="dic-card">
-      <div class="dic-phase" id="dicPhase"></div>
-      <div class="dic-btns">
-        <button id="btnDicPlay">🔊 もう一度</button>
-        <button id="btnDicSlow">🐢 ゆっくり</button>
-      </div>
-    </div>
-    <div class="label">聞こえたとおりに書く</div>
-    <textarea id="dicInput" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Attention passengers..."></textarea>
-    <button class="btn btn-main" id="btnDicCheck">答え合わせ</button>
-
-    <div id="dicResultBox" style="display:none">
-      <div class="dic-diff" id="dicDiff"></div>
-      <div class="dic-legend">赤い下線 = 書けなかった語 / 取り消し線 = 余分に書いた語</div>
-      <div class="dic-answer" id="dicAnswer"></div>
-      <div class="dic-score" id="dicScoreLine"></div>
-      <div class="grade" style="margin-top:16px">
-        <button class="g-good" id="btnDicOk">✓ 次へ<small>書けた</small></button>
-        <button class="g-bad" id="btnDicNg">△ チェックして次へ<small>要復習</small></button>
-      </div>
-    </div>
-    <button class="btn btn-sub" id="btnDicQuit">やめてホームへ</button>
-  </div>
-
-  <!-- ======== DICTATION DONE ======== -->
-  <div class="screen" id="scrDicDone">
-    <div class="score-big"><span class="num" id="dicAvg">0</span><span class="den">%</span></div>
-    <div class="score-sub">ディクテーションの平均正解率</div>
-    <div class="trend" id="dicDoneSub"></div>
-    <div class="weak-list" id="dicMissList"></div>
-    <button class="btn btn-main" id="btnDicToDrill">この長文で瞬間英作文へ</button>
-    <button class="btn btn-sub" id="btnDicRetry">もう一度ディクテーション</button>
-    <button class="btn btn-sub" id="btnDicHome">ホームへ</button>
   </div>
 
   <!-- ======== LOADING ======== -->
@@ -501,18 +486,18 @@ if (typeof cfg.scope !== "string") cfg.scope = "";   // 出題範囲: "" = す�
 let deck = migrateDeck();
 function migrateDeck() {
   const existing = store.get("is_deck", null);
-  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "", dicOk: !!c.dicOk }));
+  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "" }));
   // 旧バージョン(シーン制)からの一度きりの移行: custom + weak を平坦化して引き継ぐ
   const out = [];
   const seen = new Set();
   (store.get("is_custom", [])).forEach(c => {
-    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false, grp: "", dicOk: false }); seen.add(c.jp); }
+    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false, grp: "" }); seen.add(c.jp); }
   });
   (store.get("is_weak", [])).forEach(w => {
     if (!w.jp || !w.en) return;
     const ex = out.find(d => d.jp === w.jp);
     if (ex) ex.hard = true;
-    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true, grp: "", dicOk: false }); seen.add(w.jp); }
+    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true, grp: "" }); seen.add(w.jp); }
   });
   store.set("is_deck", out);
   return out;
@@ -593,6 +578,20 @@ function splitPassage(text, mode) {
   sents.forEach(s => splitLong(s, 12).forEach(x => out.push(x)));
   return out;
 }
+function splitJapanese(text) {
+  // すでに改行で区切られていればその区切りを尊重。無ければ句点で区切る
+  const t = String(text).replace(/\r/g, "").replace(/[ \t　]+/g, " ").trim();
+  if (!t) return [];
+  if (t.includes("\n")) return t.split("\n").map(s => s.trim()).filter(Boolean);
+  const out = [];
+  let buf = "";
+  for (const ch of t) {
+    buf += ch;
+    if (ch === "。" || ch === "！" || ch === "？" || ch === "!" || ch === "?") { out.push(buf.trim()); buf = ""; }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
 
 /* ================= ディクテーションの採点(語単位の差分) ================= */
 function normTok(w) {
@@ -662,23 +661,20 @@ function renderSetup() {
   const ready = drillReady(pool);
   const noJp = pool.length - ready.length;
   const total = deck.length, hc = ready.filter(c => c.hard).length;
-  const dicDone = pool.filter(c => c.dicOk).length;
   $("homeCount").textContent = total
     ? (cfg.scope
         ? `📁 ${cfg.scope} — ${pool.length}問(順番どおりに出題)${hc ? ` ・ チェック中 ${hc}問` : ""}`
         : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}`)
-    : "まだ問題がありません。「① 長文を貼って区切る」で英文を取り込んでください。";
-  $("btnDic").disabled = pool.length === 0;
-  $("dicCount").textContent = pool.length ? ` (${dicDone}/${pool.length}問クリア)` : "";
+    : "まだ問題がありません。「書き取り → 答え合わせ → 登録」から始めてください。";
   $("btnStart").disabled = ready.length === 0;
-  $("btnStart").textContent = !total ? "先に長文を取り込んでください"
-    : ready.length === 0 ? "③ 瞬間英作文(日本語訳が必要)"
-    : cfg.scope ? "③ この長文を順番に瞬間英作文" : "③ 瞬間英作文を始める";
+  $("btnStart").textContent = !total ? "先に問題を登録してください"
+    : ready.length === 0 ? "瞬間英作文(日本語訳が必要)"
+    : cfg.scope ? "この長文を順番に瞬間英作文" : "瞬間英作文を始める";
   $("hardCount").textContent = hc;
   $("btnHard").style.display = hc > 0 ? "block" : "none";
   $("errSetup").style.display = "none";
   $("jpWarn").style.display = noJp ? "block" : "none";
-  if (noJp) $("jpWarn").textContent = `※ ${noJp}問は日本語訳が未入力です(ディクテーションは可、瞬間英作文には出ません)。「① 長文を貼って区切る」→「日本語訳をあとから流し込む」で追加できます。`;
+  if (noJp) $("jpWarn").textContent = `※ ${noJp}問は日本語訳が未入力なので瞬間英作文には出ません。「書き取り → 答え合わせ → 登録」画面の「日本語訳をあとから流し込む」で追加できます。`;
 
   if (history.length) {
     const h = history[history.length - 1];
@@ -769,7 +765,7 @@ function saveImported(sentences, grp) {
   let added = 0, skipped = 0;
   sentences.forEach(s => {
     if (existing.has(s.jp)) { skipped++; return; }
-    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false, grp: g, dicOk: false });
+    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false, grp: g });
     existing.add(s.jp);
     added++;
   });
@@ -833,47 +829,118 @@ $("btnImportScreen").onclick = () => {
   show("scrImport");
 };
 $("btnImportHome").onclick = () => { renderSetup(); show("scrSetup"); };
-function chunkLines() {
-  return $("chunkBox").value.split("\n").map(s => s.trim()).filter(Boolean);
+/* ---- ② 答え合わせ(手持ちの音声で書き取った英文 vs 正解) ---- */
+let dicFlags = null;   // 正解英文の語ごとに書き取れたか [{n, ok}]
+$("btnCheckDic").onclick = () => {
+  $("errImport").style.display = "none";
+  const answer = $("impText").value.trim();
+  const attempt = $("dicAttempt").value.trim();
+  if (!answer) { impError("正解の英文を入れてください"); return; }
+  if (!attempt) { impError("①に書き取った英文を入れてください(答え合わせしない場合はそのまま④へ進めます)"); return; }
+  const r = diffWords(answer, attempt);
+  dicFlags = [];
+  const diffEl = $("dicDiff");
+  diffEl.innerHTML = "";
+  r.ops.forEach(o => {
+    if (o.t !== "extra") dicFlags.push({ n: normTok(o.w), ok: o.t === "ok" });
+    const s = document.createElement("span");
+    s.className = o.t === "ok" ? "w-ok" : o.t === "miss" ? "w-miss" : "w-extra";
+    s.textContent = o.w;
+    diffEl.appendChild(s);
+    diffEl.appendChild(document.createTextNode(" "));
+  });
+  $("dicScoreLine").innerHTML = `<b>${r.score}</b>% (${r.hit}/${r.total}語 書き取れました)`;
+  $("dicResultBox").style.display = "block";
+};
+function impError(msg) { $("errImport").textContent = msg; $("errImport").style.display = "block"; }
+
+/* ---- ④ 区切る(英文と日本語を1行=1問で対応させる) ---- */
+function linesOf(id) { return $(id).value.split("\n").map(s => s.trim()).filter(Boolean); }
+function chunkHasMiss(chunkText, cursor) {
+  // 書き取れなかった語をこのチャンクが含むか(手直しで語が変わっても崩れないよう先読み付き)
+  if (!dicFlags || !dicFlags.length) return false;
+  let miss = false;
+  chunkText.split(/\s+/).map(normTok).filter(Boolean).forEach(w => {
+    let found = -1;
+    for (let d = 0; d < 6 && cursor.i + d < dicFlags.length; d++) {
+      if (dicFlags[cursor.i + d].n === w) { found = cursor.i + d; break; }
+    }
+    if (found >= 0) { if (!dicFlags[found].ok) miss = true; cursor.i = found + 1; }
+  });
+  return miss;
 }
-function updateChunkCount() {
-  const n = chunkLines().length;
-  $("chunkCount").textContent = `${n}問に分かれています(1行=1問)`;
-  $("btnSaveChunks").disabled = n === 0;
+function renderPairs() {
+  const en = linesOf("chunkBox"), jp = linesOf("jpChunkBox");
+  const cnt = $("chunkCount");
+  if (en.length === jp.length) {
+    cnt.className = "chunk-count ok";
+    cnt.textContent = `英文 ${en.length}行 / 日本語 ${jp.length}行 — 対応しています`;
+  } else {
+    cnt.className = "chunk-count bad";
+    cnt.textContent = `英文 ${en.length}行 / 日本語 ${jp.length}行 — 行数が違います。日本語側を英文と同じ${en.length}行に揃えてください(足りない分は日本語なしで登録されます)`;
+  }
+  const list = $("pairList");
+  list.innerHTML = "";
+  const cursor = { i: 0 };
+  en.forEach((e, i) => {
+    const hard = chunkHasMiss(e, cursor);
+    const d = document.createElement("div");
+    d.className = "pair-item" + (jp[i] ? "" : " miss");
+    d.innerHTML = `${hard ? '<span class="phard">要復習</span>' : ""}<div class="pen"><span class="pn">${i + 1}.</span></div><div class="pjp"></div>`;
+    d.querySelector(".pen").appendChild(document.createTextNode(e));
+    const jpEl = d.querySelector(".pjp");
+    jpEl.textContent = jp[i] || "(日本語なし)";
+    if (!jp[i]) jpEl.classList.add("empty");
+    list.appendChild(d);
+  });
+  $("btnSaveChunks").disabled = en.length === 0;
 }
-$("chunkBox").addEventListener("input", updateChunkCount);
+$("chunkBox").addEventListener("input", renderPairs);
+$("jpChunkBox").addEventListener("input", renderPairs);
 $("btnSplit").onclick = () => {
   $("errImport").style.display = "none";
   $("impMsg").style.display = "none";
   const text = $("impText").value.trim();
-  if (!text) { $("errImport").textContent = "英文を貼り付けてください"; $("errImport").style.display = "block"; return; }
-  const chunks = splitPassage(text, impMode);
-  $("chunkBox").value = chunks.join("\n");
+  if (!text) { impError("②に正解の英文を入れてください"); return; }
+  $("chunkBox").value = splitPassage(text, impMode).join("\n");
+  $("jpChunkBox").value = splitJapanese($("jpText").value).join("\n");
   $("impPreviewBox").style.display = "block";
-  updateChunkCount();
+  renderPairs();
 };
 $("btnSaveChunks").onclick = () => {
   $("errImport").style.display = "none";
   const grp = $("impGrp").value.trim();
-  const chunks = chunkLines();
-  if (!chunks.length) { $("errImport").textContent = "区切り結果が空です"; $("errImport").style.display = "block"; return; }
+  const en = linesOf("chunkBox"), jp = linesOf("jpChunkBox");
+  if (!en.length) { impError("区切り結果が空です"); return; }
   const existing = new Set(cardsInGroup(grp).map(c => c.en));
-  let added = 0, skipped = 0;
-  chunks.forEach(en => {
-    if (existing.has(en)) { skipped++; return; }
-    deck.push({ jp: "", en, note: "", hard: false, grp, dicOk: false });
-    existing.add(en);
+  const cursor = { i: 0 };
+  let added = 0, skipped = 0, hardN = 0, noJpN = 0;
+  en.forEach((e, i) => {
+    const hard = chunkHasMiss(e, cursor);
+    if (existing.has(e)) { skipped++; return; }
+    deck.push({ jp: jp[i] || "", en: e, note: "", hard, grp });
+    existing.add(e);
     added++;
+    if (hard) hardN++;
+    if (!jp[i]) noJpN++;
   });
   if (added) saveDeck();
+  // 入力欄をリセットして次の長文へ
+  $("dicAttempt").value = "";
   $("impText").value = "";
+  $("jpText").value = "";
   $("chunkBox").value = "";
+  $("jpChunkBox").value = "";
   $("impPreviewBox").style.display = "none";
+  $("dicResultBox").style.display = "none";
+  dicFlags = null;
   if (grp) { cfg.scope = grp; save(); transGrp = grp; }
   const el = $("impMsg");
-  el.innerHTML = `${grp ? `📁 ${grp} に` : ""}${added}問を保存しました${skipped ? `(重複${skipped}問はスキップ)` : ""}。<br>このままディクテーションできます。瞬間英作文には日本語訳が必要なので、下の「日本語訳をあとから流し込む」から入れてください。`;
+  el.innerHTML = `${grp ? `📁 ${grp} に` : ""}${added}問を登録しました`
+    + (skipped ? `(重複${skipped}問はスキップ)` : "")
+    + (hardN ? `<br>書き取れなかった語を含む ${hardN}問に「✓チェック」を付けました。` : "")
+    + (noJpN ? `<br>${noJpN}問は日本語なしです。下の「日本語訳をあとから流し込む」で追加できます。` : "<br>ホームの「瞬間英作文を始める」でこの長文を順番に練習できます。");
   el.style.display = "block";
-  $("transBox").open = true;
   renderImport();
 };
 function buildTransPrompt(grp) {
@@ -938,8 +1005,7 @@ function normWordsKey(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/* ================= ② ディクテーション ================= */
-let dicQueue = [], dicIdx = 0, dicScores = [], dicSlow = false;
+/* ---- 英語の読み上げ(試聴用) ---- */
 function sayEn(text, rate) {
   try { speechSynthesis.cancel(); } catch {}
   try {
@@ -950,110 +1016,6 @@ function sayEn(text, rate) {
     speechSynthesis.speak(u);
   } catch {}
 }
-function dicRate() { return dicSlow ? 0.65 : driveCfg.enRate; }
-$("btnDic").onclick = () => {
-  $("errSetup").style.display = "none";
-  const pool = scopeCards();
-  if (!pool.length) { setupError("先に「① 長文を貼って区切る」で英文を登録してください"); return; }
-  try { voicesCache = speechSynthesis.getVoices(); } catch {}
-  dicQueue = pool.slice();          // フォルダ指定時は長文の順番どおり
-  if (!cfg.scope) shuffle(dicQueue);
-  dicIdx = 0;
-  dicScores = [];
-  dicSlow = false;
-  show("scrDic");
-  renderDicQuestion();              // タップの流れの中で読み上げ(iOSの音声解錠のため)
-};
-function renderDicQuestion() {
-  const bar = $("dicProg");
-  bar.innerHTML = "";
-  for (let i = 0; i < dicQueue.length; i++) {
-    const d = document.createElement("i");
-    if (i < dicIdx) d.className = dicScores[i] === 100 ? "done-good" : "done-hard";
-    else if (i === dicIdx) d.className = "now";
-    bar.appendChild(d);
-  }
-  $("dicPhase").textContent = `${dicIdx + 1} / ${dicQueue.length}  聞いて書き取る`;
-  $("dicInput").value = "";
-  $("dicInput").disabled = false;
-  $("dicResultBox").style.display = "none";
-  $("btnDicCheck").style.display = "block";
-  $("btnDicSlow").textContent = dicSlow ? "🐢 ゆっくり中" : "🐢 ゆっくり";
-  sayEn(dicQueue[dicIdx].en, dicRate());
-}
-$("btnDicPlay").onclick = () => sayEn(dicQueue[dicIdx].en, dicRate());
-$("btnDicSlow").onclick = () => {
-  dicSlow = !dicSlow;
-  $("btnDicSlow").textContent = dicSlow ? "🐢 ゆっくり中" : "🐢 ゆっくり";
-  sayEn(dicQueue[dicIdx].en, dicRate());
-};
-$("btnDicCheck").onclick = () => {
-  const card = dicQueue[dicIdx];
-  const r = diffWords(card.en, $("dicInput").value);
-  dicScores[dicIdx] = r.score;
-  const diffEl = $("dicDiff");
-  diffEl.innerHTML = "";
-  r.ops.forEach(o => {
-    const s = document.createElement("span");
-    s.className = o.t === "ok" ? "w-ok" : o.t === "miss" ? "w-miss" : "w-extra";
-    s.textContent = o.w;
-    diffEl.appendChild(s);
-    diffEl.appendChild(document.createTextNode(" "));
-  });
-  $("dicAnswer").textContent = card.en;
-  $("dicScoreLine").innerHTML = `<b>${r.score}</b>% (${r.hit}/${r.total}語)`;
-  $("dicResultBox").style.display = "block";
-  $("btnDicCheck").style.display = "none";
-  $("dicInput").disabled = true;
-  card.dicOk = r.score === 100;
-  saveDeck();
-  try { speechSynthesis.cancel(); } catch {}
-};
-function dicNext(markHard) {
-  const card = dicQueue[dicIdx];
-  card.hard = !!markHard;
-  saveDeck();
-  dicIdx++;
-  if (dicIdx < dicQueue.length) renderDicQuestion();
-  else finishDic();
-}
-$("btnDicOk").onclick = () => dicNext(false);
-$("btnDicNg").onclick = () => dicNext(true);
-$("btnDicQuit").onclick = () => { try { speechSynthesis.cancel(); } catch {} renderSetup(); show("scrSetup"); };
-function finishDic() {
-  try { speechSynthesis.cancel(); } catch {}
-  const avg = dicScores.length ? Math.round(dicScores.reduce((a, b) => a + b, 0) / dicScores.length) : 0;
-  $("dicAvg").textContent = avg;
-  const perfect = dicScores.filter(s => s === 100).length;
-  $("dicDoneSub").innerHTML = `<span class="up">${perfect}/${dicScores.length}問を完璧に書き取れました</span>`;
-  const list = $("dicMissList");
-  list.innerHTML = "";
-  dicQueue.forEach((c, i) => {
-    if (dicScores[i] === 100) return;
-    const d = document.createElement("div");
-    d.className = "weak-item";
-    d.innerHTML = `<span class="mark">${dicScores[i]}%</span><div class="wjp"></div><div class="wen"></div>`;
-    d.querySelector(".wjp").textContent = c.en;
-    d.querySelector(".wen").textContent = c.jp || "(和訳なし)";
-    list.appendChild(d);
-  });
-  const ready = drillReady(dicQueue).length;
-  $("btnDicToDrill").style.display = ready ? "block" : "none";
-  show("scrDicDone");
-}
-$("btnDicRetry").onclick = () => {
-  dicIdx = 0; dicScores = [];
-  show("scrDic");
-  renderDicQuestion();
-};
-$("btnDicToDrill").onclick = () => {
-  const ready = drillReady(dicQueue);
-  if (!ready.length) return;
-  drill = ready.slice();
-  drill.mode = "all";
-  startDrill();
-};
-$("btnDicHome").onclick = () => { renderSetup(); show("scrSetup"); };
 
 /* ================= drill flow ================= */
 // drill は deck 内カードへの参照配列。◎△の記録が直接デッキに反映される
