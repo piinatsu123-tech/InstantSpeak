@@ -40,6 +40,19 @@ body {
 .head h1 span { color: var(--lamp); }
 .head .streak { font-size: .78rem; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
 
+/* ---------- tabs ---------- */
+.tabs {
+  display: none; gap: 5px; margin-bottom: 20px; padding: 4px;
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 999px;
+}
+.tabs.on { display: flex; }
+.tab {
+  flex: 1; border: none; background: none; color: var(--paper-dim);
+  font-family: var(--ui); font-size: .9rem; font-weight: 600;
+  padding: 12px 8px; border-radius: 999px; cursor: pointer;
+}
+.tab.sel { background: rgba(240,168,104,.16); color: var(--lamp); }
+
 /* ---------- screens ---------- */
 .screen { display: none; }
 .screen.on { display: block; animation: fadein .25s ease; }
@@ -254,24 +267,33 @@ details.keybox > div { margin-top: 10px; }
     <div class="streak" id="histBadge"></div>
   </div>
 
-  <!-- ======== HOME ======== -->
+  <div class="tabs" id="tabBar">
+    <button class="tab" data-tab="scrSetup">🚗 練習</button>
+    <button class="tab" data-tab="scrPrep">📝 問題を準備</button>
+  </div>
+
+  <!-- ======== 練習タブ ======== -->
   <div class="screen on" id="scrSetup">
     <div class="deck-count" id="homeCount"></div>
 
     <div class="label" id="scopeLabel" style="display:none">出題範囲</div>
     <div class="chips" id="scopeChips"></div>
 
-    <div class="label">考える時間(瞬間英作文)</div>
-    <div class="chips" id="timerChips"></div>
+    <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:24px">🚗 ドライブモード(音声のみ)</button>
 
-    <button class="btn btn-main step-btn" id="btnImportScreen" style="margin-top:22px">✍️ 書き取り → 答え合わせ → 登録</button>
-    <button class="btn btn-main" id="btnStart" style="margin-top:10px">瞬間英作文を始める</button>
-    <button class="btn btn-sub" id="btnHard" style="display:none">✓ チェックした問題だけ (<span id="hardCount">0</span>問)</button>
-    <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:10px">🚗 ドライブモード(音声のみ)</button>
-    <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
+    <div class="label" id="timerLabel" style="display:none">考える時間(画面で解くとき)</div>
+    <div class="chips" id="timerChips"></div>
+    <button class="btn btn-sub" id="btnHard" style="display:none">✓ チェックした問題だけ画面で解く (<span id="hardCount">0</span>問)</button>
 
     <div class="lastscore" id="lastScore"></div>
     <div class="errbox" id="errSetup"></div>
+  </div>
+
+  <!-- ======== 準備タブ ======== -->
+  <div class="screen" id="scrPrep">
+    <div class="deck-count" id="prepCount"></div>
+    <button class="btn btn-main step-btn" id="btnImportScreen">✍️ 書き取り → 答え合わせ → 登録</button>
+    <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
     <div class="note" id="jpWarn" style="display:none"></div>
   </div>
 
@@ -663,18 +685,21 @@ function renderSetup() {
   const total = deck.length, hc = ready.filter(c => c.hard).length;
   $("homeCount").textContent = total
     ? (cfg.scope
-        ? `📁 ${cfg.scope} — ${pool.length}問(順番どおりに出題)${hc ? ` ・ チェック中 ${hc}問` : ""}`
-        : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}`)
-    : "まだ問題がありません。「書き取り → 答え合わせ → 登録」から始めてください。";
-  $("btnStart").disabled = ready.length === 0;
-  $("btnStart").textContent = !total ? "先に問題を登録してください"
-    : ready.length === 0 ? "瞬間英作文(日本語訳が必要)"
-    : cfg.scope ? "この長文を順番に瞬間英作文" : "瞬間英作文を始める";
+        ? `📁 ${cfg.scope} — ${pool.length}問(順番どおり)${hc ? ` ・ チェック中 ${hc}問` : ""}${noJp ? ` ・ 和訳なし ${noJp}問` : ""}`
+        : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}${noJp ? ` ・ 和訳なし ${noJp}問` : ""}`)
+    : "まだ問題がありません。「📝 問題を準備」タブから登録してください。";
+  $("btnDrive").disabled = total === 0;
   $("hardCount").textContent = hc;
+  // 画面で解くのはチェック問題の復習用。無いときは行ごと隠してすっきりさせる
   $("btnHard").style.display = hc > 0 ? "block" : "none";
+  $("timerLabel").style.display = hc > 0 ? "block" : "none";
+  $("timerChips").style.display = hc > 0 ? "flex" : "none";
   $("errSetup").style.display = "none";
+  $("prepCount").textContent = total
+    ? `登録 ${total}問${groups.length ? ` ・ 長文 ${groups.length}件` : ""}`
+    : "まだ問題がありません。下の「書き取り → 答え合わせ → 登録」から始めてください。";
   $("jpWarn").style.display = noJp ? "block" : "none";
-  if (noJp) $("jpWarn").textContent = `※ ${noJp}問は日本語訳が未入力なので瞬間英作文には出ません。「書き取り → 答え合わせ → 登録」画面の「日本語訳をあとから流し込む」で追加できます。`;
+  if (noJp) $("jpWarn").textContent = `※ ${noJp}問は日本語訳が未入力なので出題されません。「書き取り → 答え合わせ → 登録」画面の「日本語訳をあとから流し込む」で追加できます。`;
 
   if (history.length) {
     const h = history[history.length - 1];
@@ -686,11 +711,19 @@ function renderSetup() {
 function save() { store.set("is_cfg", cfg); }
 
 /* ================= screen switch ================= */
+const TAB_SCREENS = ["scrSetup", "scrPrep"];
 function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $(id).classList.add("on");
+  // タブバーは2つのホーム画面でだけ出す
+  const isTab = TAB_SCREENS.includes(id);
+  $("tabBar").classList.toggle("on", isTab);
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("sel", t.dataset.tab === id));
   window.scrollTo(0, 0);
 }
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => { renderSetup(); show(t.dataset.tab); };
+});
 function setupError(msg) {
   show("scrSetup");
   $("errSetup").textContent = msg;
@@ -828,7 +861,7 @@ $("btnImportScreen").onclick = () => {
   renderImport();
   show("scrImport");
 };
-$("btnImportHome").onclick = () => { renderSetup(); show("scrSetup"); };
+$("btnImportHome").onclick = () => { renderSetup(); show("scrPrep"); };  // 来た場所(準備タブ)へ戻る
 /* ---- ② 答え合わせ(手持ちの音声で書き取った英文 vs 正解) ---- */
 let dicFlags = null;   // 正解英文の語ごとに書き取れたか [{n, ok}]
 $("btnCheckDic").onclick = () => {
@@ -1019,19 +1052,6 @@ function sayEn(text, rate) {
 
 /* ================= drill flow ================= */
 // drill は deck 内カードへの参照配列。◎△の記録が直接デッキに反映される
-$("btnStart").onclick = () => {
-  $("errSetup").style.display = "none";
-  if (!deck.length) { setupError("先に「① 長文を貼って区切る」から英文を登録してください"); return; }
-  const pool = drillReady(scopeCards());
-  if (!pool.length) {
-    setupError("日本語訳が入っている問題がありません。「① 長文を貼って区切る」→「日本語訳をあとから流し込む」で和訳を入れてください(ディクテーションは和訳なしでもできます)");
-    return;
-  }
-  drill = pool.slice();
-  if (!cfg.scope) shuffle(drill);  // フォルダ指定時は長文の順番どおりに出題
-  drill.mode = "all";
-  startDrill();
-};
 $("btnHard").onclick = () => {
   const hard = drillReady(scopeCards()).filter(c => c.hard);
   if (!hard.length) { setupError("チェックした問題(日本語訳あり)がありません"); return; }
@@ -1566,7 +1586,7 @@ $("btnLogSkip").onclick = () => { driveLog = []; renderSetup(); show("scrSetup")
 
 /* ================= deck editor ================= */
 $("btnDeck").onclick = () => { deckFilter = "all"; $("importMsg").style.display = "none"; renderDeck(); show("scrDeck"); };
-$("btnDeckHome").onclick = () => { renderSetup(); show("scrSetup"); };
+$("btnDeckHome").onclick = () => { renderSetup(); show("scrPrep"); };
 
 function deckFilterGroup() {
   // フォルダ表示中ならそのフォルダ名("" = 未分類)、それ以外は null
@@ -1718,6 +1738,7 @@ $("edDelete").onclick = () => {
 };
 
 renderSetup();
+show(deck.length ? "scrSetup" : "scrPrep");  // 問題が無い初回は準備タブから
 </script>
 </body>
 </html>
