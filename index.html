@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>InstantSpeak — 瞬間英作文ドリル</title>
+<title>InstantSpeak — ディクテーション&瞬間英作文</title>
 <style>
 :root {
   --ink: #131929;
@@ -175,6 +175,35 @@ details.keybox > div { margin-top: 10px; }
 .log-item .len { font-size: .85rem; color: var(--lamp); }
 .log-item .lmark { font-size: 1.3rem; width: 1.6em; text-align: center; flex-shrink: 0; }
 
+/* ---------- dictation ---------- */
+.dic-card {
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 20px;
+  padding: 24px 20px; text-align: center;
+}
+.dic-phase { font-size: .78rem; color: var(--paper-dim); letter-spacing: .08em; }
+.dic-btns { display: flex; gap: 8px; margin-top: 16px; }
+.dic-btns button {
+  flex: 1; border-radius: var(--radius); padding: 14px 4px; font-size: .95rem; font-weight: 600;
+  font-family: var(--ui); cursor: pointer; background: var(--ink-2); color: var(--paper); border: 1px solid var(--ink-3);
+}
+.dic-btns button:active { transform: scale(.97); }
+.dic-diff {
+  font-size: 1.05rem; line-height: 2; text-align: left; margin-top: 14px;
+  background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius); padding: 16px 15px;
+}
+.dic-diff .w-ok { color: var(--paper); }
+.dic-diff .w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
+.dic-diff .w-extra { color: var(--paper-dim); text-decoration: line-through; opacity: .7; }
+.dic-answer { font-size: 1.05rem; font-weight: 700; color: var(--lamp); line-height: 1.6; margin-top: 12px; text-align: left; }
+.dic-score { font-size: .85rem; margin-top: 10px; color: var(--paper-dim); }
+.dic-score b { font-size: 1.35rem; color: var(--lamp); font-variant-numeric: tabular-nums; }
+.dic-legend { font-size: .72rem; color: var(--paper-dim); margin-top: 8px; line-height: 1.7; }
+
+/* ---------- import (長文の取り込み) ---------- */
+#chunkBox { min-height: 180px; font-size: 15px; line-height: 1.9; }
+.step-btn { background: rgba(240,168,104,.13); color: var(--lamp); border: 1px solid var(--lamp-dim); }
+.chunk-count { font-size: .75rem; color: var(--paper-dim); margin-top: 8px; }
+
 /* ---------- deck editor ---------- */
 .deck-item {
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
@@ -227,16 +256,95 @@ details.keybox > div { margin-top: 10px; }
     <div class="label" id="scopeLabel" style="display:none">出題範囲</div>
     <div class="chips" id="scopeChips"></div>
 
-    <div class="label">考える時間</div>
+    <div class="label">考える時間(瞬間英作文)</div>
     <div class="chips" id="timerChips"></div>
 
-    <button class="btn btn-main" id="btnStart">瞬間英作文を始める</button>
+    <button class="btn btn-main step-btn" id="btnImportScreen" style="margin-top:22px">① 長文を貼って区切る</button>
+    <button class="btn btn-sub" id="btnDic">② ディクテーション<span id="dicCount"></span></button>
+    <button class="btn btn-main" id="btnStart" style="margin-top:10px">③ 瞬間英作文を始める</button>
     <button class="btn btn-sub" id="btnHard" style="display:none">✓ チェックした問題だけ (<span id="hardCount">0</span>問)</button>
     <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:10px">🚗 ドライブモード(音声のみ)</button>
     <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
 
     <div class="lastscore" id="lastScore"></div>
     <div class="errbox" id="errSetup"></div>
+    <div class="note" id="jpWarn" style="display:none"></div>
+  </div>
+
+  <!-- ======== IMPORT (長文を貼って区切る) ======== -->
+  <div class="screen" id="scrImport">
+    <div class="label">長文のタイトル(フォルダ名)</div>
+    <input type="text" id="impGrp" placeholder="例: Part4 空港アナウンス">
+
+    <div class="label">英文をまるごと貼り付け</div>
+    <textarea id="impText" placeholder="Attention passengers. Flight 402 to Chicago has been delayed due to weather conditions. We expect to begin boarding at 3:30 p.m. ..."></textarea>
+
+    <div class="label">区切り方</div>
+    <div class="chips" id="impModeChips"></div>
+    <button class="btn btn-sub" id="btnSplit" style="margin-top:12px">✂ 区切ってみる</button>
+
+    <div id="impPreviewBox" style="display:none">
+      <div class="label">区切り結果 — 1行=1問。改行で分ける・つなげて1行にすれば結合できます</div>
+      <textarea id="chunkBox"></textarea>
+      <div class="chunk-count" id="chunkCount"></div>
+      <button class="btn btn-main" id="btnSaveChunks">この区切りで保存する</button>
+    </div>
+
+    <details class="keybox" id="transBox">
+      <summary>日本語訳をあとから流し込む</summary>
+      <div>
+        <div class="note">保存した長文を選び、AIに訳してもらった日本語を流し込みます。1行に1つ、問題と同じ順番で並べてください(AIの返答がJSONでもそのまま貼れます)。</div>
+        <div class="label">対象の長文</div>
+        <div class="chips" id="transGrpChips"></div>
+        <button class="btn btn-sub" id="btnCopyTransPrompt" style="margin-top:10px">📋 翻訳の依頼文をコピー</button>
+        <div class="label">日本語訳を貼り付け</div>
+        <textarea id="transText" placeholder="ご搭乗のみなさまにお知らせします。&#10;シカゴ行き402便は悪天候のため遅れております。&#10;..."></textarea>
+        <button class="btn btn-sub" id="btnApplyTrans" style="margin-top:10px">日本語訳を流し込む</button>
+        <div class="okbox" id="transMsg"></div>
+      </div>
+    </details>
+
+    <button class="btn btn-sub" id="btnImportHome">ホームへ</button>
+    <div class="errbox" id="errImport"></div>
+    <div class="okbox" id="impMsg"></div>
+  </div>
+
+  <!-- ======== DICTATION ======== -->
+  <div class="screen" id="scrDic">
+    <div class="progress" id="dicProg"></div>
+    <div class="dic-card">
+      <div class="dic-phase" id="dicPhase"></div>
+      <div class="dic-btns">
+        <button id="btnDicPlay">🔊 もう一度</button>
+        <button id="btnDicSlow">🐢 ゆっくり</button>
+      </div>
+    </div>
+    <div class="label">聞こえたとおりに書く</div>
+    <textarea id="dicInput" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Attention passengers..."></textarea>
+    <button class="btn btn-main" id="btnDicCheck">答え合わせ</button>
+
+    <div id="dicResultBox" style="display:none">
+      <div class="dic-diff" id="dicDiff"></div>
+      <div class="dic-legend">赤い下線 = 書けなかった語 / 取り消し線 = 余分に書いた語</div>
+      <div class="dic-answer" id="dicAnswer"></div>
+      <div class="dic-score" id="dicScoreLine"></div>
+      <div class="grade" style="margin-top:16px">
+        <button class="g-good" id="btnDicOk">✓ 次へ<small>書けた</small></button>
+        <button class="g-bad" id="btnDicNg">△ チェックして次へ<small>要復習</small></button>
+      </div>
+    </div>
+    <button class="btn btn-sub" id="btnDicQuit">やめてホームへ</button>
+  </div>
+
+  <!-- ======== DICTATION DONE ======== -->
+  <div class="screen" id="scrDicDone">
+    <div class="score-big"><span class="num" id="dicAvg">0</span><span class="den">%</span></div>
+    <div class="score-sub">ディクテーションの平均正解率</div>
+    <div class="trend" id="dicDoneSub"></div>
+    <div class="weak-list" id="dicMissList"></div>
+    <button class="btn btn-main" id="btnDicToDrill">この長文で瞬間英作文へ</button>
+    <button class="btn btn-sub" id="btnDicRetry">もう一度ディクテーション</button>
+    <button class="btn btn-sub" id="btnDicHome">ホームへ</button>
   </div>
 
   <!-- ======== LOADING ======== -->
@@ -393,18 +501,18 @@ if (typeof cfg.scope !== "string") cfg.scope = "";   // 出題範囲: "" = す�
 let deck = migrateDeck();
 function migrateDeck() {
   const existing = store.get("is_deck", null);
-  if (existing) return existing.map(c => ({ jp: c.jp, en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "" }));
+  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "", dicOk: !!c.dicOk }));
   // 旧バージョン(シーン制)からの一度きりの移行: custom + weak を平坦化して引き継ぐ
   const out = [];
   const seen = new Set();
   (store.get("is_custom", [])).forEach(c => {
-    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false, grp: "" }); seen.add(c.jp); }
+    if (c.jp && c.en && !seen.has(c.jp)) { out.push({ jp: c.jp, en: c.en, note: c.note || "", hard: false, grp: "", dicOk: false }); seen.add(c.jp); }
   });
   (store.get("is_weak", [])).forEach(w => {
     if (!w.jp || !w.en) return;
     const ex = out.find(d => d.jp === w.jp);
     if (ex) ex.hard = true;
-    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true, grp: "" }); seen.add(w.jp); }
+    else if (!seen.has(w.jp)) { out.push({ jp: w.jp, en: w.en, note: w.note || "", hard: true, grp: "", dicOk: false }); seen.add(w.jp); }
   });
   store.set("is_deck", out);
   return out;
@@ -420,6 +528,100 @@ function groupNames() {
 }
 function cardsInGroup(g) { return deck.filter(c => (c.grp || "") === g); }
 function scopeCards() { return cfg.scope ? cardsInGroup(cfg.scope) : deck.slice(); }
+function drillReady(cards) { return cards.filter(c => c.jp && c.jp.trim()); }  // 瞬間英作文は和訳が必要
+
+/* ================= 長文の区切り(ディクテーション用チャンク作り) ================= */
+const SPLIT_MODES = [ { id: "short", label: "短く区切る", tag: "推奨" }, { id: "sent", label: "文ごと" } ];
+const ABBREV = /\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Inc|Ltd|Co|Corp|No|Ave|Blvd|Rd|Dept|Fig|Vol|approx|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.$/i;
+function isSentenceEnd(buf) {
+  // 略語・頭文字・小数の直後は文末とみなさない (Mr. / U.S. / e.g. / 3.5)
+  if (ABBREV.test(buf)) return false;
+  if (/(^|[\s(])[A-Za-z]\.$/.test(buf)) return false;
+  if (/\d\.$/.test(buf)) return false;
+  return true;
+}
+function splitSentences(text) {
+  const t = String(text).replace(/\s+/g, " ").trim();
+  const out = [];
+  let buf = "";
+  for (let i = 0; i < t.length; i++) {
+    buf += t[i];
+    if (t[i] === "." || t[i] === "!" || t[i] === "?") {
+      let j = i + 1;
+      while (j < t.length && /["')\]”’]/.test(t[j])) { buf += t[j]; j++; }
+      while (j < t.length && (t[j] === "." || t[j] === "!" || t[j] === "?")) { buf += t[j]; j++; } // ?! や ...
+      if ((j >= t.length || t[j] === " ") && isSentenceEnd(buf)) {
+        out.push(buf.trim());
+        buf = "";
+      }
+      i = j - 1;
+    }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
+const CONJ = ["and","but","or","so","because","which","who","whom","whose","that","when","while","if","although","though","after","before","since","until","unless","whether","as","where","however","therefore"];
+function splitLong(sent, maxWords) {
+  // 長い文をカンマ等の区切りや接続詞の前で分ける(1片が MIN 語未満にならないように)
+  const words = sent.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return [sent];
+  const MIN = 4;
+  const canBreak = new Array(words.length).fill(false);
+  for (let i = 1; i < words.length; i++) {
+    if (/[,;:]$|[—-]{1,2}$/.test(words[i - 1])) canBreak[i] = true;
+    const w = words[i].toLowerCase().replace(/[^a-z']/g, "");
+    if (CONJ.includes(w)) canBreak[i] = true;
+  }
+  const out = [];
+  let start = 0;
+  while (words.length - start > maxWords) {
+    let cut = -1;
+    const hi = Math.min(start + maxWords, words.length - MIN);
+    for (let i = start + MIN; i <= hi; i++) if (canBreak[i]) cut = i;
+    if (cut < 0) cut = hi;
+    if (cut <= start) break;
+    out.push(words.slice(start, cut).join(" "));
+    start = cut;
+  }
+  out.push(words.slice(start).join(" "));
+  return out.filter(s => s.trim());
+}
+function splitPassage(text, mode) {
+  const sents = splitSentences(text);
+  if (mode === "sent") return sents;
+  const out = [];
+  sents.forEach(s => splitLong(s, 12).forEach(x => out.push(x)));
+  return out;
+}
+
+/* ================= ディクテーションの採点(語単位の差分) ================= */
+function normTok(w) {
+  // 大文字小文字・記号・アポストロフィは無視(聞き取れたかを見るので it's と its は同じ扱い)
+  return String(w).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function diffWords(answer, typed) {
+  // 正解側は元の表記を保ちつつ、比較は正規化した語で行う
+  const aPairs = String(answer).split(/\s+/).map(w => ({ raw: w, n: normTok(w) })).filter(x => x.n);
+  const b = String(typed).split(/\s+/).map(normTok).filter(Boolean);
+  const n = aPairs.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = aPairs[i].n === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (aPairs[i].n === b[j]) { ops.push({ t: "ok", w: aPairs[i].raw }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ t: "miss", w: aPairs[i].raw }); i++; }
+    else { ops.push({ t: "extra", w: b[j] }); j++; }
+  }
+  while (i < n) ops.push({ t: "miss", w: aPairs[i++].raw });
+  while (j < m) ops.push({ t: "extra", w: b[j++] });
+  const hit = ops.filter(o => o.t === "ok").length;
+  // 抜けも余分な語も減点する(合っている語 / 全操作数)
+  const denom = ops.length || 1;
+  return { ops, hit, total: n, score: Math.round(hit / denom * 100) };
+}
 
 let history  = store.get("is_hist", []);     // {date,total,good}
 let deckFilter = "all";                       // 問題集画面のフィルタ "all" | "hard" | "g:<フォルダ名>"
@@ -457,18 +659,26 @@ function renderSetup() {
   } else $("scopeChips").innerHTML = "";
 
   const pool = scopeCards();
-  const total = deck.length, hc = pool.filter(c => c.hard).length;
+  const ready = drillReady(pool);
+  const noJp = pool.length - ready.length;
+  const total = deck.length, hc = ready.filter(c => c.hard).length;
+  const dicDone = pool.filter(c => c.dicOk).length;
   $("homeCount").textContent = total
     ? (cfg.scope
-        ? `📁 ${cfg.scope} — ${pool.length}問を順番どおりに出題${hc ? ` ・ チェック中 ${hc}問` : ""}`
+        ? `📁 ${cfg.scope} — ${pool.length}問(順番どおりに出題)${hc ? ` ・ チェック中 ${hc}問` : ""}`
         : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}`)
-    : "まだ問題がありません。「問題を追加・編集する」から登録してください。";
-  $("btnStart").disabled = pool.length === 0;
-  $("btnStart").textContent = !total ? "問題を追加してください"
-    : cfg.scope ? "この長文を順番に始める" : "瞬間英作文を始める";
+    : "まだ問題がありません。「① 長文を貼って区切る」で英文を取り込んでください。";
+  $("btnDic").disabled = pool.length === 0;
+  $("dicCount").textContent = pool.length ? ` (${dicDone}/${pool.length}問クリア)` : "";
+  $("btnStart").disabled = ready.length === 0;
+  $("btnStart").textContent = !total ? "先に長文を取り込んでください"
+    : ready.length === 0 ? "③ 瞬間英作文(日本語訳が必要)"
+    : cfg.scope ? "③ この長文を順番に瞬間英作文" : "③ 瞬間英作文を始める";
   $("hardCount").textContent = hc;
   $("btnHard").style.display = hc > 0 ? "block" : "none";
   $("errSetup").style.display = "none";
+  $("jpWarn").style.display = noJp ? "block" : "none";
+  if (noJp) $("jpWarn").textContent = `※ ${noJp}問は日本語訳が未入力です(ディクテーションは可、瞬間英作文には出ません)。「① 長文を貼って区切る」→「日本語訳をあとから流し込む」で追加できます。`;
 
   if (history.length) {
     const h = history[history.length - 1];
@@ -559,7 +769,7 @@ function saveImported(sentences, grp) {
   let added = 0, skipped = 0;
   sentences.forEach(s => {
     if (existing.has(s.jp)) { skipped++; return; }
-    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false, grp: g });
+    deck.push({ jp: s.jp, en: s.en, note: s.note || "", hard: false, grp: g, dicOk: false });
     existing.add(s.jp);
     added++;
   });
@@ -589,21 +799,280 @@ $("btnImportSave").onclick = () => {
   }
 };
 
+/* ================= ① 長文を貼って区切る ================= */
+let impMode = "short";
+let transGrp = "";            // 日本語訳の流し込み対象フォルダ
+function renderImport() {
+  chipsPlain($("impModeChips"), SPLIT_MODES, it => impMode === it.id, it => { impMode = it.id; renderImport(); });
+  const groups = groupNames();
+  if (transGrp && !groups.includes(transGrp)) transGrp = "";
+  if (!transGrp && groups.length) transGrp = groups[groups.length - 1];
+  const items = groups.map(g => {
+    const miss = cardsInGroup(g).filter(c => !c.jp).length;
+    return { id: g, label: `📁 ${g}`, tag: miss ? `和訳なし${miss}` : "済" };
+  });
+  if (items.length) chipsPlain($("transGrpChips"), items, it => transGrp === it.id, it => { transGrp = it.id; renderImport(); });
+  else $("transGrpChips").innerHTML = '<span class="note" style="font-size:.8rem">まだ長文がありません</span>';
+}
+function chipsPlain(el, items, getSel, onSel) {
+  // chips()と同じだが renderSetup() を呼ばない(取り込み画面用)
+  el.innerHTML = "";
+  items.forEach((it, i) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (getSel(it, i) ? " sel" : "");
+    b.innerHTML = (it.label || it) + (it.tag ? `<small>${it.tag}</small>` : "");
+    b.onclick = () => onSel(it, i);
+    el.appendChild(b);
+  });
+}
+$("btnImportScreen").onclick = () => {
+  $("errImport").style.display = "none";
+  $("impMsg").style.display = "none";
+  $("transMsg").style.display = "none";
+  renderImport();
+  show("scrImport");
+};
+$("btnImportHome").onclick = () => { renderSetup(); show("scrSetup"); };
+function chunkLines() {
+  return $("chunkBox").value.split("\n").map(s => s.trim()).filter(Boolean);
+}
+function updateChunkCount() {
+  const n = chunkLines().length;
+  $("chunkCount").textContent = `${n}問に分かれています(1行=1問)`;
+  $("btnSaveChunks").disabled = n === 0;
+}
+$("chunkBox").addEventListener("input", updateChunkCount);
+$("btnSplit").onclick = () => {
+  $("errImport").style.display = "none";
+  $("impMsg").style.display = "none";
+  const text = $("impText").value.trim();
+  if (!text) { $("errImport").textContent = "英文を貼り付けてください"; $("errImport").style.display = "block"; return; }
+  const chunks = splitPassage(text, impMode);
+  $("chunkBox").value = chunks.join("\n");
+  $("impPreviewBox").style.display = "block";
+  updateChunkCount();
+};
+$("btnSaveChunks").onclick = () => {
+  $("errImport").style.display = "none";
+  const grp = $("impGrp").value.trim();
+  const chunks = chunkLines();
+  if (!chunks.length) { $("errImport").textContent = "区切り結果が空です"; $("errImport").style.display = "block"; return; }
+  const existing = new Set(cardsInGroup(grp).map(c => c.en));
+  let added = 0, skipped = 0;
+  chunks.forEach(en => {
+    if (existing.has(en)) { skipped++; return; }
+    deck.push({ jp: "", en, note: "", hard: false, grp, dicOk: false });
+    existing.add(en);
+    added++;
+  });
+  if (added) saveDeck();
+  $("impText").value = "";
+  $("chunkBox").value = "";
+  $("impPreviewBox").style.display = "none";
+  if (grp) { cfg.scope = grp; save(); transGrp = grp; }
+  const el = $("impMsg");
+  el.innerHTML = `${grp ? `📁 ${grp} に` : ""}${added}問を保存しました${skipped ? `(重複${skipped}問はスキップ)` : ""}。<br>このままディクテーションできます。瞬間英作文には日本語訳が必要なので、下の「日本語訳をあとから流し込む」から入れてください。`;
+  el.style.display = "block";
+  $("transBox").open = true;
+  renderImport();
+};
+function buildTransPrompt(grp) {
+  const cards = cardsInGroup(grp);
+  const list = cards.map((c, i) => `${i + 1}. ${c.en}`).join("\n");
+  return `次の英文は1つの長文を瞬間英作文用に区切ったものです。それぞれに自然な日本語訳を付けてください。
+
+条件:
+- 出力は日本語訳だけを1行に1つ、番号を付けずに、上と同じ順番で${cards.length}行
+- 直訳ではなく、その日本語を見たら元の英文が言えるような自然な訳に
+- 余計な前置きや説明は書かない
+
+${list}`;
+}
+$("btnCopyTransPrompt").onclick = async () => {
+  if (!transGrp) { $("errImport").textContent = "対象の長文を選んでください"; $("errImport").style.display = "block"; return; }
+  try {
+    await navigator.clipboard.writeText(buildTransPrompt(transGrp));
+    $("btnCopyTransPrompt").textContent = "コピーしました ✓ AIに貼ってください";
+    setTimeout(() => $("btnCopyTransPrompt").textContent = "📋 翻訳の依頼文をコピー", 2500);
+  } catch {
+    $("errImport").textContent = "コピーに失敗しました。手動でコピーしてください";
+    $("errImport").style.display = "block";
+  }
+};
+$("btnApplyTrans").onclick = () => {
+  $("transMsg").style.display = "none";
+  $("errImport").style.display = "none";
+  const cards = cardsInGroup(transGrp);
+  if (!cards.length) { $("errImport").textContent = "対象の長文がありません"; $("errImport").style.display = "block"; return; }
+  const raw = $("transText").value;
+  if (!raw.trim()) { $("errImport").textContent = "日本語訳を貼り付けてください"; $("errImport").style.display = "block"; return; }
+  let filled = 0;
+  // ① AIがJSONで返してきた場合は jp/en のペアとして扱う
+  let pairs = null;
+  try { pairs = parseSentences(raw); } catch { pairs = null; }
+  if (pairs) {
+    const byEn = new Map();
+    cards.forEach(c => byEn.set(normWordsKey(c.en), c));
+    pairs.forEach((s, i) => {
+      const c = byEn.get(normWordsKey(s.en)) || (pairs.length === cards.length ? cards[i] : null);
+      if (c && s.jp) { c.jp = s.jp; if (s.note) c.note = s.note; filled++; }
+    });
+  } else {
+    // ② 1行1訳。順番どおりに流し込む
+    const lines = raw.split("\n").map(s => s.replace(/^\s*\d+[.)、.]\s*/, "").trim()).filter(Boolean);
+    lines.forEach((jp, i) => { if (cards[i]) { cards[i].jp = jp; filled++; } });
+    if (lines.length !== cards.length) {
+      $("errImport").textContent = `行数が合いません(問題${cards.length}問に対して${lines.length}行)。順番どおりに${cards.length}行で貼り付けてください。先頭から${Math.min(lines.length, cards.length)}問分だけ入れました。`;
+      $("errImport").style.display = "block";
+    }
+  }
+  saveDeck();
+  const rest = cardsInGroup(transGrp).filter(c => !c.jp).length;
+  const el = $("transMsg");
+  el.textContent = `${filled}問に日本語訳を入れました` + (rest ? `(残り${rest}問が未入力)` : "(この長文は瞬間英作文の準備OK)");
+  el.style.display = "block";
+  if (!rest) $("transText").value = "";
+  renderImport();
+};
+function normWordsKey(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/* ================= ② ディクテーション ================= */
+let dicQueue = [], dicIdx = 0, dicScores = [], dicSlow = false;
+function sayEn(text, rate) {
+  try { speechSynthesis.cancel(); } catch {}
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickPreferredEnVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = "en-US";
+    u.rate = rate;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+function dicRate() { return dicSlow ? 0.65 : driveCfg.enRate; }
+$("btnDic").onclick = () => {
+  $("errSetup").style.display = "none";
+  const pool = scopeCards();
+  if (!pool.length) { setupError("先に「① 長文を貼って区切る」で英文を登録してください"); return; }
+  try { voicesCache = speechSynthesis.getVoices(); } catch {}
+  dicQueue = pool.slice();          // フォルダ指定時は長文の順番どおり
+  if (!cfg.scope) shuffle(dicQueue);
+  dicIdx = 0;
+  dicScores = [];
+  dicSlow = false;
+  show("scrDic");
+  renderDicQuestion();              // タップの流れの中で読み上げ(iOSの音声解錠のため)
+};
+function renderDicQuestion() {
+  const bar = $("dicProg");
+  bar.innerHTML = "";
+  for (let i = 0; i < dicQueue.length; i++) {
+    const d = document.createElement("i");
+    if (i < dicIdx) d.className = dicScores[i] === 100 ? "done-good" : "done-hard";
+    else if (i === dicIdx) d.className = "now";
+    bar.appendChild(d);
+  }
+  $("dicPhase").textContent = `${dicIdx + 1} / ${dicQueue.length}  聞いて書き取る`;
+  $("dicInput").value = "";
+  $("dicInput").disabled = false;
+  $("dicResultBox").style.display = "none";
+  $("btnDicCheck").style.display = "block";
+  $("btnDicSlow").textContent = dicSlow ? "🐢 ゆっくり中" : "🐢 ゆっくり";
+  sayEn(dicQueue[dicIdx].en, dicRate());
+}
+$("btnDicPlay").onclick = () => sayEn(dicQueue[dicIdx].en, dicRate());
+$("btnDicSlow").onclick = () => {
+  dicSlow = !dicSlow;
+  $("btnDicSlow").textContent = dicSlow ? "🐢 ゆっくり中" : "🐢 ゆっくり";
+  sayEn(dicQueue[dicIdx].en, dicRate());
+};
+$("btnDicCheck").onclick = () => {
+  const card = dicQueue[dicIdx];
+  const r = diffWords(card.en, $("dicInput").value);
+  dicScores[dicIdx] = r.score;
+  const diffEl = $("dicDiff");
+  diffEl.innerHTML = "";
+  r.ops.forEach(o => {
+    const s = document.createElement("span");
+    s.className = o.t === "ok" ? "w-ok" : o.t === "miss" ? "w-miss" : "w-extra";
+    s.textContent = o.w;
+    diffEl.appendChild(s);
+    diffEl.appendChild(document.createTextNode(" "));
+  });
+  $("dicAnswer").textContent = card.en;
+  $("dicScoreLine").innerHTML = `<b>${r.score}</b>% (${r.hit}/${r.total}語)`;
+  $("dicResultBox").style.display = "block";
+  $("btnDicCheck").style.display = "none";
+  $("dicInput").disabled = true;
+  card.dicOk = r.score === 100;
+  saveDeck();
+  try { speechSynthesis.cancel(); } catch {}
+};
+function dicNext(markHard) {
+  const card = dicQueue[dicIdx];
+  card.hard = !!markHard;
+  saveDeck();
+  dicIdx++;
+  if (dicIdx < dicQueue.length) renderDicQuestion();
+  else finishDic();
+}
+$("btnDicOk").onclick = () => dicNext(false);
+$("btnDicNg").onclick = () => dicNext(true);
+$("btnDicQuit").onclick = () => { try { speechSynthesis.cancel(); } catch {} renderSetup(); show("scrSetup"); };
+function finishDic() {
+  try { speechSynthesis.cancel(); } catch {}
+  const avg = dicScores.length ? Math.round(dicScores.reduce((a, b) => a + b, 0) / dicScores.length) : 0;
+  $("dicAvg").textContent = avg;
+  const perfect = dicScores.filter(s => s === 100).length;
+  $("dicDoneSub").innerHTML = `<span class="up">${perfect}/${dicScores.length}問を完璧に書き取れました</span>`;
+  const list = $("dicMissList");
+  list.innerHTML = "";
+  dicQueue.forEach((c, i) => {
+    if (dicScores[i] === 100) return;
+    const d = document.createElement("div");
+    d.className = "weak-item";
+    d.innerHTML = `<span class="mark">${dicScores[i]}%</span><div class="wjp"></div><div class="wen"></div>`;
+    d.querySelector(".wjp").textContent = c.en;
+    d.querySelector(".wen").textContent = c.jp || "(和訳なし)";
+    list.appendChild(d);
+  });
+  const ready = drillReady(dicQueue).length;
+  $("btnDicToDrill").style.display = ready ? "block" : "none";
+  show("scrDicDone");
+}
+$("btnDicRetry").onclick = () => {
+  dicIdx = 0; dicScores = [];
+  show("scrDic");
+  renderDicQuestion();
+};
+$("btnDicToDrill").onclick = () => {
+  const ready = drillReady(dicQueue);
+  if (!ready.length) return;
+  drill = ready.slice();
+  drill.mode = "all";
+  startDrill();
+};
+$("btnDicHome").onclick = () => { renderSetup(); show("scrSetup"); };
+
 /* ================= drill flow ================= */
 // drill は deck 内カードへの参照配列。◎△の記録が直接デッキに反映される
 $("btnStart").onclick = () => {
   $("errSetup").style.display = "none";
-  if (!deck.length) { setupError("先に「問題を追加・編集する」から問題を登録してください"); return; }
-  const pool = scopeCards();
-  if (!pool.length) { setupError("このフォルダに問題がありません"); return; }
+  if (!deck.length) { setupError("先に「① 長文を貼って区切る」から英文を登録してください"); return; }
+  const pool = drillReady(scopeCards());
+  if (!pool.length) {
+    setupError("日本語訳が入っている問題がありません。「① 長文を貼って区切る」→「日本語訳をあとから流し込む」で和訳を入れてください(ディクテーションは和訳なしでもできます)");
+    return;
+  }
   drill = pool.slice();
   if (!cfg.scope) shuffle(drill);  // フォルダ指定時は長文の順番どおりに出題
   drill.mode = "all";
   startDrill();
 };
 $("btnHard").onclick = () => {
-  const hard = scopeCards().filter(c => c.hard);
-  if (!hard.length) { setupError("チェックした問題がありません"); return; }
+  const hard = drillReady(scopeCards()).filter(c => c.hard);
+  if (!hard.length) { setupError("チェックした問題(日本語訳あり)がありません"); return; }
   drill = hard.slice();
   if (!cfg.scope) shuffle(drill);
   drill.mode = "hard";
@@ -672,7 +1141,8 @@ function reveal() {
 }
 $("btnReveal").onclick = reveal;
 
-document.querySelectorAll(".grade button").forEach(b => {
+// ドリル画面内に限定して束縛する(ディクテーション画面の .grade と衝突させない)
+document.querySelectorAll("#ansBox .grade button").forEach(b => {
   b.onclick = () => {
     const g = b.dataset.g; // "good" | "hard"
     results.push(g);
@@ -983,12 +1453,7 @@ function renderDriveSetup() {
 }
 $("btnVoicePreview").onclick = () => {
   try { voicesCache = speechSynthesis.getVoices(); } catch {}
-  try { speechSynthesis.cancel(); } catch {}
-  const u = new SpeechSynthesisUtterance("This place looks amazing. I can't wait to explore it.");
-  const v = pickPreferredEnVoice();
-  if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = driveCfg.enRate;
-  try { speechSynthesis.speak(u); } catch {}
+  sayEn("This place looks amazing. I can't wait to explore it.", driveCfg.enRate);
 };
 $("btnDrive").onclick = () => {
   try { voicesCache = speechSynthesis.getVoices(); } catch {}
@@ -999,12 +1464,13 @@ $("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
 
 $("btnDriveStart").onclick = async () => {
   $("errDrive").style.display = "none";
-  let pool = driveCfg.grp ? cardsInGroup(driveCfg.grp) : deck.slice();
+  // ドライブは日本語→英語の読み上げなので和訳のあるカードだけ
+  let pool = drillReady(driveCfg.grp ? cardsInGroup(driveCfg.grp) : deck.slice());
   if (driveCfg.src === "hard") pool = pool.filter(c => c.hard);
   if (!pool.length) {
     $("errDrive").textContent = driveCfg.src === "hard"
       ? "チェックした問題がありません。「全部」を選ぶか、先にドリルでチェックをどうぞ"
-      : "問題がありません。先に問題を追加してください";
+      : "日本語訳のある問題がありません。先に日本語訳を流し込んでください";
     $("errDrive").style.display = "block";
     return;
   }
@@ -1193,7 +1659,8 @@ function renderDeck() {
     d.className = "deck-item";
     d.innerHTML = `<button class="dcheck">${card.hard ? "✓" : "○"}</button>
       <div class="djp"></div><div class="den"></div>`;
-    d.querySelector(".djp").textContent = card.jp;
+    d.querySelector(".djp").textContent = card.jp || "(日本語訳なし)";
+    if (!card.jp) d.querySelector(".djp").style.color = "var(--paper-dim)";
     d.querySelector(".den").textContent = card.en;
     const chk = d.querySelector(".dcheck");
     if (card.hard) chk.classList.add("on");
