@@ -23,13 +23,14 @@
   --ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { font-size: 16px; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 body {
   font-family: var(--ui);
   background: var(--ink);
   color: var(--paper);
+  /* dvhはiOSでキーボードの開閉やURLバーの伸縮のたびに変わり、
+     入力中に画面が揺れる原因になるので使わない */
   min-height: 100vh;
-  min-height: 100dvh;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
 }
 .app { max-width: 480px; margin: 0 auto; padding: 20px 18px 40px; }
@@ -201,7 +202,9 @@ details.keybox > div { margin-top: 10px; }
 .dic-legend { font-size: .72rem; color: var(--paper-dim); margin-top: 8px; line-height: 1.7; }
 
 /* ---------- import (書き取り→答え合わせ→登録) ---------- */
-#chunkBox, #jpChunkBox { min-height: 150px; font-size: 15px; line-height: 1.9; }
+/* 1行=1問のテキストエリア。iOSは16px未満だとフォーカス時に自動ズームして
+   画面が揺れるため、必ず16px以上にする */
+#chunkBox, #jpChunkBox { min-height: 150px; font-size: 16px; line-height: 1.9; }
 .step-btn { background: rgba(240,168,104,.13); color: var(--lamp); border: 1px solid var(--lamp-dim); }
 .chunk-count { font-size: .78rem; margin-top: 10px; }
 .chunk-count.bad { color: var(--bad); }
@@ -928,8 +931,17 @@ function renderPairs() {
   });
   $("btnSaveChunks").disabled = en.length === 0;
 }
-$("chunkBox").addEventListener("input", renderPairs);
-$("jpChunkBox").addEventListener("input", renderPairs);
+// 1文字ごとに下のプレビューを作り直すと入力中に画面が揺れるので、
+// 打ち終わってから(または入力欄を離れたときに)まとめて描き直す
+let pairTimer = null;
+function renderPairsSoon() {
+  clearTimeout(pairTimer);
+  pairTimer = setTimeout(renderPairs, 400);
+}
+["chunkBox", "jpChunkBox"].forEach(id => {
+  $(id).addEventListener("input", renderPairsSoon);
+  $(id).addEventListener("blur", () => { clearTimeout(pairTimer); renderPairs(); });
+});
 $("btnSplit").onclick = () => {
   $("errImport").style.display = "none";
   $("impMsg").style.display = "none";
@@ -972,7 +984,7 @@ $("btnSaveChunks").onclick = () => {
   el.innerHTML = `${grp ? `📁 ${grp} に` : ""}${added}問を登録しました`
     + (skipped ? `(重複${skipped}問はスキップ)` : "")
     + (hardN ? `<br>書き取れなかった語を含む ${hardN}問に「✓チェック」を付けました。` : "")
-    + (noJpN ? `<br>${noJpN}問は日本語なしです。下の「日本語訳をあとから流し込む」で追加できます。` : "<br>ホームの「瞬間英作文を始める」でこの長文を順番に練習できます。");
+    + (noJpN ? `<br>${noJpN}問は日本語なしです。下の「日本語訳をあとから流し込む」で追加できます。` : "<br>「🚗 練習」タブのドライブモードで、この長文を順番に流せます。");
   el.style.display = "block";
   renderImport();
 };
