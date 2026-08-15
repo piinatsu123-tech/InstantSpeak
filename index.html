@@ -195,7 +195,8 @@ details.keybox > div { margin-top: 10px; }
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius); padding: 16px 15px;
 }
 .dic-diff .w-ok { color: var(--paper); }
-.dic-diff .w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
+/* 書き取れなかった語。答え合わせ欄だけでなく登録後の英文表示でも使う */
+.w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
 .dic-diff .w-extra { color: var(--paper-dim); text-decoration: line-through; opacity: .7; }
 .dic-score { font-size: .85rem; margin-top: 10px; color: var(--paper-dim); }
 .dic-score b { font-size: 1.35rem; color: var(--lamp); font-variant-numeric: tabular-nums; }
@@ -505,13 +506,14 @@ let cfg = store.get("is_cfg", { timer: 8, scope: "" });
 if (typeof cfg.timer !== "number") cfg.timer = 8;
 if (typeof cfg.scope !== "string") cfg.scope = "";   // 出題範囲: "" = すべて / フォルダ名
 
-// deck: ユーザーが取り込んだ自作カードだけの一次元リスト {jp,en,note,hard,grp}
+// deck: ユーザーが取り込んだ自作カードだけの一次元リスト {jp,en,note,hard,grp,miss}
 // hard=true が「わからなかった/要復習」チェック済み
 // grp  = フォルダ名(長文のタイトルなど)。"" は未分類。同じフォルダ内は配列順=長文の順番
+// miss = 書き取れなかった語(正規化済み)。英文表示時に赤字+下線にする
 let deck = migrateDeck();
 function migrateDeck() {
   const existing = store.get("is_deck", null);
-  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "" }));
+  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "", miss: Array.isArray(c.miss) ? c.miss : [] }));
   // 旧バージョン(シーン制)からの一度きりの移行: custom + weak を平坦化して引き継ぐ
   const out = [];
   const seen = new Set();
@@ -539,6 +541,21 @@ function groupNames() {
 function cardsInGroup(g) { return deck.filter(c => (c.grp || "") === g); }
 function scopeCards() { return cfg.scope ? cardsInGroup(cfg.scope) : deck.slice(); }
 function drillReady(cards) { return cards.filter(c => c.jp && c.jp.trim()); }  // 瞬間英作文は和訳が必要
+function fillEnWithMiss(el, card) {
+  // 英文を表示する。書き取れなかった語は赤字+下線にする
+  el.innerHTML = "";
+  const miss = card.miss || [];
+  if (!miss.length) { el.textContent = card.en; return; }
+  String(card.en).split(/(\s+)/).forEach(part => {
+    const t = part.trim() ? normTok(part) : "";
+    if (t && miss.includes(t)) {
+      const s = document.createElement("span");
+      s.className = "w-miss";
+      s.textContent = part;
+      el.appendChild(s);
+    } else el.appendChild(document.createTextNode(part));
+  });
+}
 
 /* ================= 長文の区切り(ディクテーション用チャンク作り) ================= */
 const SPLIT_MODES = [ { id: "short", label: "短く区切る", tag: "推奨" }, { id: "sent", label: "文ごと" } ];
@@ -892,18 +909,21 @@ function impError(msg) { $("errImport").textContent = msg; $("errImport").style.
 
 /* ---- ④ 区切る(英文と日本語を1行=1問で対応させる) ---- */
 function linesOf(id) { return $(id).value.split("\n").map(s => s.trim()).filter(Boolean); }
-function chunkHasMiss(chunkText, cursor) {
-  // 書き取れなかった語をこのチャンクが含むか(手直しで語が変わっても崩れないよう先読み付き)
-  if (!dicFlags || !dicFlags.length) return false;
-  let miss = false;
+function chunkMissTokens(chunkText, cursor) {
+  // このチャンクの中で書き取れなかった語を返す(手直しで語が変わっても崩れないよう先読み付き)
+  if (!dicFlags || !dicFlags.length) return [];
+  const out = [];
   chunkText.split(/\s+/).map(normTok).filter(Boolean).forEach(w => {
     let found = -1;
     for (let d = 0; d < 6 && cursor.i + d < dicFlags.length; d++) {
       if (dicFlags[cursor.i + d].n === w) { found = cursor.i + d; break; }
     }
-    if (found >= 0) { if (!dicFlags[found].ok) miss = true; cursor.i = found + 1; }
+    if (found >= 0) {
+      if (!dicFlags[found].ok && !out.includes(w)) out.push(w);
+      cursor.i = found + 1;
+    }
   });
-  return miss;
+  return out;
 }
 function renderPairs() {
   const en = linesOf("chunkBox"), jp = linesOf("jpChunkBox");
@@ -919,7 +939,7 @@ function renderPairs() {
   list.innerHTML = "";
   const cursor = { i: 0 };
   en.forEach((e, i) => {
-    const hard = chunkHasMiss(e, cursor);
+    const hard = chunkMissTokens(e, cursor).length > 0;
     const d = document.createElement("div");
     d.className = "pair-item" + (jp[i] ? "" : " miss");
     d.innerHTML = `${hard ? '<span class="phard">要復習</span>' : ""}<div class="pen"><span class="pn">${i + 1}.</span></div><div class="pjp"></div>`;
@@ -961,9 +981,10 @@ $("btnSaveChunks").onclick = () => {
   const cursor = { i: 0 };
   let added = 0, skipped = 0, hardN = 0, noJpN = 0;
   en.forEach((e, i) => {
-    const hard = chunkHasMiss(e, cursor);
+    const miss = chunkMissTokens(e, cursor);   // 登録後も赤字表示できるよう保存する
+    const hard = miss.length > 0;
     if (existing.has(e)) { skipped++; return; }
-    deck.push({ jp: jp[i] || "", en: e, note: "", hard, grp });
+    deck.push({ jp: jp[i] || "", en: e, note: "", hard, grp, miss });
     existing.add(e);
     added++;
     if (hard) hardN++;
@@ -1127,7 +1148,7 @@ function startTimer() {
 
 function reveal() {
   clearInterval(timerId);
-  $("aEn").textContent = drill[idx].en;
+  fillEnWithMiss($("aEn"), drill[idx]);
   $("aTip").textContent = drill[idx].note ? "💡 " + drill[idx].note : "";
   $("ansBox").classList.add("on");
   $("btnReveal").style.display = "none";
@@ -1655,7 +1676,7 @@ function renderDeck() {
       <div class="djp"></div><div class="den"></div>`;
     d.querySelector(".djp").textContent = card.jp || "(日本語訳なし)";
     if (!card.jp) d.querySelector(".djp").style.color = "var(--paper-dim)";
-    d.querySelector(".den").textContent = card.en;
+    fillEnWithMiss(d.querySelector(".den"), card);
     const chk = d.querySelector(".dcheck");
     if (card.hard) chk.classList.add("on");
     chk.onclick = e => { e.stopPropagation(); card.hard = !card.hard; saveDeck(); renderDeck(); };
