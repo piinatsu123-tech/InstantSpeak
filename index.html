@@ -636,14 +636,19 @@ function splitJapanese(text) {
 }
 
 /* ================= ディクテーションの採点(語単位の差分) ================= */
+function normSpaces(s) {
+  // 予測入力やIME経由で混ざる全角英数を半角に統一(NFKC)し、
+  // ゼロ幅文字は語の区切りとして扱う
+  return String(s).normalize("NFKC").replace(/[\u200B-\u200D\u2060\uFEFF]/g, " ");
+}
 function normTok(w) {
   // 大文字小文字・記号・アポストロフィは無視(聞き取れたかを見るので it's と its は同じ扱い)
-  return String(w).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normSpaces(w).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function diffWords(answer, typed) {
   // 正解側は元の表記を保ちつつ、比較は正規化した語で行う
-  const aPairs = String(answer).split(/\s+/).map(w => ({ raw: w, n: normTok(w) })).filter(x => x.n);
-  const b = String(typed).split(/\s+/).map(normTok).filter(Boolean);
+  const aPairs = normSpaces(answer).split(/\s+/).map(w => ({ raw: w, n: normTok(w) })).filter(x => x.n);
+  const b = normSpaces(typed).split(/\s+/).map(normTok).filter(Boolean);
   const n = aPairs.length, m = b.length;
   const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--)
