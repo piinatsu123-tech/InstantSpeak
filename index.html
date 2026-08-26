@@ -516,7 +516,8 @@ if (typeof cfg.scope !== "string") cfg.scope = "";   // 出題範囲: "" = す�
 let deck = migrateDeck();
 function migrateDeck() {
   const existing = store.get("is_deck", null);
-  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "", miss: Array.isArray(c.miss) ? c.miss : [] }));
+  // miss は「何語目か」の配列。旧形式(語そのもの)は読み込み時に位置へ変換する
+  if (existing) return existing.map(c => ({ jp: c.jp || "", en: c.en, note: c.note || "", hard: !!c.hard, grp: c.grp || "", miss: missToIndices(c.en, c.miss) }));
   // 旧バージョン(シーン制)からの一度きりの移行: custom + weak を平坦化して引き継ぐ
   const out = [];
   const seen = new Set();
@@ -544,14 +545,29 @@ function groupNames() {
 function cardsInGroup(g) { return deck.filter(c => (c.grp || "") === g); }
 function scopeCards() { return cfg.scope ? cardsInGroup(cfg.scope) : deck.slice(); }
 function drillReady(cards) { return cards.filter(c => c.jp && c.jp.trim()); }  // 瞬間英作文は和訳が必要
+function missWords(en) {
+  // 赤字の位置を数えるときの語の並び(記号だけの語は数えない)
+  return String(en).split(/\s+/).filter(w => normTok(w));
+}
+function missToIndices(en, miss) {
+  // 旧形式(語そのもので保存)を「何語目か」に変換する。
+  // どの出現かは記録が残っていないため、その語の全出現を対象にする
+  if (!Array.isArray(miss) || !miss.length) return [];
+  if (typeof miss[0] === "number") return miss.slice();
+  const out = [];
+  missWords(en).forEach((raw, i) => { if (miss.includes(normTok(raw))) out.push(i); });
+  return out;
+}
 function fillEnWithMiss(el, card) {
-  // 英文を表示する。書き取れなかった語は赤字+下線にする
+  // 英文を表示する。書き取れなかった語だけを赤字+下線にする(位置で判定)
   el.innerHTML = "";
-  const miss = card.miss || [];
+  const miss = missToIndices(card.en, card.miss);
   if (!miss.length) { el.textContent = card.en; return; }
+  let wi = -1;
   String(card.en).split(/(\s+)/).forEach(part => {
     const t = part.trim() ? normTok(part) : "";
-    if (t && miss.includes(t)) {
+    if (t) wi++;
+    if (t && miss.includes(wi)) {
       const s = document.createElement("span");
       s.className = "w-miss";
       s.textContent = part;
@@ -953,17 +969,20 @@ function impError(msg) { $("errImport").textContent = msg; $("errImport").style.
 
 /* ---- ④ 区切る(英文と日本語を1行=1問で対応させる) ---- */
 function linesOf(id) { return $(id).value.split("\n").map(s => s.trim()).filter(Boolean); }
-function chunkMissTokens(chunkText, cursor) {
-  // このチャンクの中で書き取れなかった語を返す(手直しで語が変わっても崩れないよう先読み付き)
+function chunkMissIndices(chunkText, cursor) {
+  // このチャンクの中で書き取れなかった語が「何語目か」を返す。
+  // 同じ語が複数あっても、実際に落とした位置だけを対象にする
+  // (手直しで語が変わっても崩れないよう先読み付き)
   if (!dicFlags || !dicFlags.length) return [];
   const out = [];
-  chunkText.split(/\s+/).map(normTok).filter(Boolean).forEach(w => {
+  missWords(chunkText).forEach((raw, wi) => {
+    const w = normTok(raw);
     let found = -1;
     for (let d = 0; d < 6 && cursor.i + d < dicFlags.length; d++) {
       if (dicFlags[cursor.i + d].n === w) { found = cursor.i + d; break; }
     }
     if (found >= 0) {
-      if (!dicFlags[found].ok && !out.includes(w)) out.push(w);
+      if (!dicFlags[found].ok) out.push(wi);
       cursor.i = found + 1;
     }
   });
@@ -983,13 +1002,13 @@ function renderPairs() {
   list.innerHTML = "";
   const cursor = { i: 0 };
   en.forEach((e, i) => {
-    const missTokens = chunkMissTokens(e, cursor);
-    const hard = missTokens.length > 0;
+    const missIdx = chunkMissIndices(e, cursor);
+    const hard = missIdx.length > 0;
     const d = document.createElement("div");
     d.className = "pair-item" + (jp[i] ? "" : " miss");
     d.innerHTML = `${hard ? '<span class="phard">要復習</span>' : ""}<div class="pen"><span class="pn">${i + 1}.</span></div><div class="pjp"></div>`;
     const enSpan = document.createElement("span");   // 番号を消さないよう子要素に描く
-    fillEnWithMiss(enSpan, { en: e, miss: missTokens });
+    fillEnWithMiss(enSpan, { en: e, miss: missIdx });
     d.querySelector(".pen").appendChild(enSpan);
     const jpEl = d.querySelector(".pjp");
     jpEl.textContent = jp[i] || "(日本語なし)";
@@ -1029,7 +1048,7 @@ $("btnSaveChunks").onclick = () => {
   const cursor = { i: 0 };
   let added = 0, skipped = 0, hardN = 0, noJpN = 0;
   en.forEach((e, i) => {
-    const miss = chunkMissTokens(e, cursor);   // 登録後も赤字表示できるよう保存する
+    const miss = chunkMissIndices(e, cursor);   // 登録後も赤字表示できるよう保存する
     const hard = miss.length > 0;
     if (existing.has(e)) { skipped++; return; }
     deck.push({ jp: jp[i] || "", en: e, note: "", hard, grp, miss });
@@ -1767,22 +1786,24 @@ function renderEditMiss() {
   $("edMissLabel").style.display = has ? "block" : "none";
   const el = $("edMissChips");
   el.innerHTML = "";
-  editMiss.forEach((w, i) => {
+  const words = missWords($("edEn").value || "");
+  editMiss.forEach((pos, i) => {
     const b = document.createElement("button");
     b.className = "chip miss-chip";
-    b.textContent = w + " ✕";
+    // 同じ語が複数あっても区別できるよう「何語目か」を添える
+    b.textContent = (words[pos] || (pos + 1) + "語目") + ` (${pos + 1}語目) ✕`;
     b.onclick = () => { editMiss.splice(i, 1); renderEditMiss(); };
     el.appendChild(b);
   });
 }
 function openEditor(target, q) {
   editTarget = target;
-  editMiss = Array.isArray(q.miss) ? q.miss.slice() : [];   // 保存を押すまでは元データを変えない
-  renderEditMiss();
+  editMiss = missToIndices(q.en, q.miss);   // 保存を押すまでは元データを変えない
   $("edJp").value = q.jp;
   $("edEn").value = q.en;
   $("edNote").value = q.note || "";
   $("edGrp").value = q.grp || "";
+  renderEditMiss();                          // 英文を入れてから描く(語の表示に使うため)
   // 既存フォルダ名を入力候補に出す
   const dl = $("grpList");
   dl.innerHTML = "";
