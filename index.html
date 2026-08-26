@@ -634,6 +634,41 @@ function splitJapanese(text) {
   if (buf.trim()) out.push(buf.trim());
   return out;
 }
+function splitJapaneseClauses(s) {
+  // 読点で分ける。英文の節数と一致したときだけ使う
+  const out = [];
+  let buf = "";
+  for (const ch of String(s)) {
+    buf += ch;
+    if (ch === "、") { out.push(buf.trim()); buf = ""; }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out.filter(Boolean);
+}
+function splitAligned(enText, jpText, mode) {
+  // 英文と日本語を「文どうし」で対応させてから区切る。
+  // 文の数が合わないときだけ、従来どおり各自で区切って手直ししてもらう
+  const enS = splitSentences(enText);
+  const jpS = splitJapanese(jpText);
+  if (!jpS.length || enS.length !== jpS.length) {
+    return { en: splitPassage(enText, mode), jp: jpS };
+  }
+  const en = [], jp = [];
+  enS.forEach((e, i) => {
+    if (mode === "short") {
+      const ep = splitLong(e, 12);
+      const jpp = splitJapaneseClauses(jpS[i]);
+      // 英文を節に分けた数と、日本語を読点で分けた数が同じときだけ細かく対応させる
+      if (ep.length > 1 && ep.length === jpp.length) {
+        ep.forEach((x, k) => { en.push(x); jp.push(jpp[k]); });
+        return;
+      }
+    }
+    en.push(e);
+    jp.push(jpS[i]);
+  });
+  return { en, jp };
+}
 
 /* ================= ディクテーションの採点(語単位の差分) ================= */
 function normSpaces(s) {
@@ -972,8 +1007,9 @@ $("btnSplit").onclick = () => {
   $("impMsg").style.display = "none";
   const text = $("impText").value.trim();
   if (!text) { impError("②に正解の英文を入れてください"); return; }
-  $("chunkBox").value = splitPassage(text, impMode).join("\n");
-  $("jpChunkBox").value = splitJapanese($("jpText").value).join("\n");
+  const r = splitAligned(text, $("jpText").value, impMode);
+  $("chunkBox").value = r.en.join("\n");
+  $("jpChunkBox").value = r.jp.join("\n");
   $("impPreviewBox").style.display = "block";
   renderPairs();
 };
