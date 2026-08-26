@@ -717,10 +717,33 @@ function diffWords(answer, typed) {
   }
   while (i < n) ops.push({ t: "miss", w: aPairs[i++].raw });
   while (j < m) ops.push({ t: "extra", w: b[j++] });
-  const hit = ops.filter(o => o.t === "ok").length;
+  const fixed = mergeBoundaryOps(ops);
+  const hit = fixed.filter(o => o.t === "ok").length;
   // 抜けも余分な語も減点する(合っている語 / 全操作数)
-  const denom = ops.length || 1;
-  return { ops, hit, total: n, score: Math.round(hit / denom * 100) };
+  const denom = fixed.length || 1;
+  return { ops: fixed, hit, total: n, score: Math.round(hit / denom * 100) };
+}
+function mergeBoundaryOps(ops) {
+  // 語の区切り方が違うだけの場合を正解として扱う
+  // 例: p.m. と「p m」/ well-known と「well known」/ cannot と「can not」
+  const cat = arr => arr.map(o => normTok(o.w)).join("");
+  const out = [];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].t === "ok") { out.push(ops[i]); i++; continue; }
+    let j = i;
+    while (j < ops.length && ops[j].t !== "ok") j++;   // 不一致がひと続きの範囲
+    const block = ops.slice(i, j);
+    const miss = block.filter(o => o.t === "miss");
+    const extra = block.filter(o => o.t === "extra");
+    if (miss.length && extra.length && cat(miss) === cat(extra)) {
+      miss.forEach(o => out.push({ t: "ok", w: o.w }));  // 綴りは同じなので正解
+    } else {
+      block.forEach(o => out.push(o));
+    }
+    i = j;
+  }
+  return out;
 }
 
 let history  = store.get("is_hist", []);     // {date,total,good}
