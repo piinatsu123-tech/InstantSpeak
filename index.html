@@ -197,6 +197,7 @@ details.keybox > div { margin-top: 10px; }
 .dic-diff .w-ok { color: var(--paper); }
 /* 書き取れなかった語。答え合わせ欄だけでなく登録後の英文表示でも使う */
 .w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
+.chip.miss-chip { color: var(--bad); border-color: var(--bad); background: rgba(224,128,128,.12); }
 .dic-diff .w-extra { color: var(--paper-dim); text-decoration: line-through; opacity: .7; }
 .dic-score { font-size: .85rem; margin-top: 10px; color: var(--paper-dim); }
 .dic-score b { font-size: 1.35rem; color: var(--lamp); font-variant-numeric: tabular-nums; }
@@ -483,6 +484,8 @@ details.keybox > div { margin-top: 10px; }
       <div class="label">フォルダ(長文のタイトル・空欄なら未分類)</div>
       <input type="text" id="edGrp" list="grpList" placeholder="例: Part7 第3問 求人メール">
       <datalist id="grpList"></datalist>
+      <div class="label" id="edMissLabel" style="display:none">赤字(書き取れなかった語) — タップで赤字を消せます</div>
+      <div class="chips" id="edMissChips"></div>
       <button class="btn btn-main" id="edSave">保存</button>
       <button class="btn btn-sub btn-danger" id="edDelete">この例文を削除</button>
       <button class="btn btn-sub" id="edCancel">キャンセル</button>
@@ -707,6 +710,7 @@ function diffWords(answer, typed) {
 let history  = store.get("is_hist", []);     // {date,total,good}
 let deckFilter = "all";                       // 問題集画面のフィルタ "all" | "hard" | "g:<フォルダ名>"
 let editTarget = null;                        // 編集対象 {type, ...}
+let editMiss = [];                            // 編集中カードの赤字リスト(保存で確定)
 let drill = [];                               // deck内カードへの参照配列
 let results = [];
 let idx = 0;
@@ -1758,8 +1762,23 @@ $("btnAddSent").onclick = () => {
   openEditor({ type: "new" }, { jp: "", en: "", note: "", grp: g === null ? "" : g });
 };
 
+function renderEditMiss() {
+  const has = editMiss.length > 0;
+  $("edMissLabel").style.display = has ? "block" : "none";
+  const el = $("edMissChips");
+  el.innerHTML = "";
+  editMiss.forEach((w, i) => {
+    const b = document.createElement("button");
+    b.className = "chip miss-chip";
+    b.textContent = w + " ✕";
+    b.onclick = () => { editMiss.splice(i, 1); renderEditMiss(); };
+    el.appendChild(b);
+  });
+}
 function openEditor(target, q) {
   editTarget = target;
+  editMiss = Array.isArray(q.miss) ? q.miss.slice() : [];   // 保存を押すまでは元データを変えない
+  renderEditMiss();
   $("edJp").value = q.jp;
   $("edEn").value = q.en;
   $("edNote").value = q.note || "";
@@ -1788,6 +1807,7 @@ $("edSave").onclick = () => {
     deck.push({ ...q, hard: false });
   } else if (t.type === "card") {
     t.card.jp = q.jp; t.card.en = q.en; t.card.note = q.note;
+    t.card.miss = editMiss.slice();   // 手動で消した赤字を反映
     if ((t.card.grp || "") !== q.grp) {
       // フォルダを移動した場合は移動先の末尾へ回す(順番を保つため)
       t.card.grp = q.grp;
