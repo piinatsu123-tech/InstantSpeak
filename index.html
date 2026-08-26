@@ -979,11 +979,14 @@ function renderPairs() {
   list.innerHTML = "";
   const cursor = { i: 0 };
   en.forEach((e, i) => {
-    const hard = chunkMissTokens(e, cursor).length > 0;
+    const missTokens = chunkMissTokens(e, cursor);
+    const hard = missTokens.length > 0;
     const d = document.createElement("div");
     d.className = "pair-item" + (jp[i] ? "" : " miss");
     d.innerHTML = `${hard ? '<span class="phard">要復習</span>' : ""}<div class="pen"><span class="pn">${i + 1}.</span></div><div class="pjp"></div>`;
-    d.querySelector(".pen").appendChild(document.createTextNode(e));
+    const enSpan = document.createElement("span");   // 番号を消さないよう子要素に描く
+    fillEnWithMiss(enSpan, { en: e, miss: missTokens });
+    d.querySelector(".pen").appendChild(enSpan);
     const jpEl = d.querySelector(".pjp");
     jpEl.textContent = jp[i] || "(日本語なし)";
     if (!jp[i]) jpEl.classList.add("empty");
@@ -1246,7 +1249,7 @@ function finish() {
         <button class="wedit">✎</button>
         <div class="wjp"></div><div class="wen"></div>`;
       d.querySelector(".wjp").textContent = m.card.jp;
-      d.querySelector(".wen").textContent = m.card.en;
+      fillEnWithMiss(d.querySelector(".wen"), m.card);
       d.querySelector(".wedit").onclick = () => openEditor({ type: "card", card: m.card }, m.card);
       list.appendChild(d);
     });
@@ -1578,7 +1581,7 @@ async function driveLoop() {
     $("dPhase").textContent = "英語で言ってみる";
     await sleepCheck(driveCfg.timer * 1000);
     if (!driveOn) break;
-    $("dEn").textContent = q.en;
+    fillEnWithMiss($("dEn"), q.card || q);
     $("dPhase").textContent = "答え(2回流れます)";
     await speak(q.en, "en", driveCfg.enRate);
     await sleepCheck(500);
@@ -1636,7 +1639,7 @@ function renderDriveLog() {
     d.innerHTML = `<span class="lmark"></span><div class="ltexts"><div class="ljp"></div><div class="len"></div></div>`;
     d.querySelector(".lmark").textContent = gradeMark(l.g);
     d.querySelector(".ljp").textContent = l.jp;
-    d.querySelector(".len").textContent = l.en;
+    fillEnWithMiss(d.querySelector(".len"), l.card || l);
     d.onclick = () => {
       l.g = l.g === null ? "good" : l.g === "good" ? "soso" : l.g === "soso" ? "bad" : null;
       d.querySelector(".lmark").textContent = gradeMark(l.g);
