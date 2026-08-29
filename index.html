@@ -1403,6 +1403,22 @@ function loadVoices() {
   } catch {}
 }
 loadVoices();
+let voicePollTimer = null;
+function pollVoices() {
+  // iOSは getVoices() が最初は不完全で、onvoiceschanged も必ずしも発火しない。
+  // 設定画面を開いている間だけ少しの間くり返し取り直す
+  clearInterval(voicePollTimer);
+  let tries = 0, last = voicesCache.length;
+  voicePollTimer = setInterval(() => {
+    tries++;
+    try { voicesCache = speechSynthesis.getVoices(); } catch {}
+    if (voicesCache.length !== last) {
+      last = voicesCache.length;
+      if ($("scrDriveSetup").classList.contains("on")) renderDriveSetup();
+    }
+    if (tries >= 8 || !$("scrDriveSetup").classList.contains("on")) clearInterval(voicePollTimer);
+  }, 400);
+}
 function pickVoice(lang, prefer) {
   return voicesCache.find(v => prefer.some(p => v.name.includes(p)))
       || voicesCache.find(v => v.lang && v.lang.startsWith(lang))
@@ -1541,7 +1557,16 @@ function renderDriveSetup() {
       it => (driveCfg.enVoiceURI || "auto") === it.id,
       it => { driveCfg.enVoiceURI = it.id; store.set("is_drive", driveCfg); });
     // プレミアム/高音質の声が1つも無ければダウンロード案内を出す
-    $("voiceHint").style.display = voices.some(v => voiceTier(v)) ? "none" : "block";
+    // 高音質の声が1つも見つからないときは、いま端末が公開している声を並べて原因を切り分けられるようにする
+    const hint = $("voiceHint");
+    if (voices.some(v => voiceTier(v))) hint.style.display = "none";
+    else {
+      hint.style.display = "block";
+      hint.textContent = "より流暢な声を追加できます: iPhoneの 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「Ava(プレミアム)」などをダウンロードすると、ここに「プレミアム」タグ付きで表示されます。"
+        + "ダウンロード済みなのに出ない場合は、Safariを完全に終了して開き直してください。"
+        + "それでも出ないときは、その端末のiOSが高音質の声をWebページに公開していません(アプリ側では対応できません)。"
+        + "いまこの端末が公開している英語の声: " + (voices.map(v => v.name).join(", ") || "なし");
+    }
   }
   driveChips($("driveEnRateChips"), DRIVE_EN_RATE,
     it => driveCfg.enRate === it.r,
@@ -1564,6 +1589,7 @@ $("btnDrive").onclick = () => {
   try { voicesCache = speechSynthesis.getVoices(); } catch {}
   renderDriveSetup();
   show("scrDriveSetup");
+  pollVoices();   // 声が遅れて出揃う端末向けに少しの間取り直す
 };
 $("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
 
