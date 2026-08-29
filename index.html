@@ -39,6 +39,7 @@ body {
 .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
 .head h1 { font-family: var(--jp-serif); font-size: 1.15rem; font-weight: 600; letter-spacing: .12em; }
 .head h1 span { color: var(--lamp); }
+.head h1 span.ver { color: var(--paper-dim); font-size: .62rem; font-weight: 400; letter-spacing: .02em; font-family: var(--ui); }
 .head .streak { font-size: .78rem; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
 
 /* ---------- tabs ---------- */
@@ -268,7 +269,7 @@ details.keybox > div { margin-top: 10px; }
 <div class="app">
 
   <div class="head">
-    <h1>Instant<span>Speak</span></h1>
+    <h1>Instant<span>Speak</span> <span class="ver" id="appVer"></span></h1>
     <div class="streak" id="histBadge"></div>
   </div>
 
@@ -495,6 +496,9 @@ details.keybox > div { margin-top: 10px; }
 </div>
 <script>
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
+
+/* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
+const APP_VERSION = "1.0.0 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -1905,6 +1909,7 @@ $("edDelete").onclick = () => {
 };
 
 renderSetup();
+$("appVer").textContent = "v" + APP_VERSION;
 show(deck.length ? "scrSetup" : "scrPrep");  // 問題が無い初回は準備タブから
 </script>
 </body>
