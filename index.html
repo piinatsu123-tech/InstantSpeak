@@ -340,12 +340,19 @@ details.keybox > div { margin-top: 10px; }
 
   <!-- ======== IMPORT (書き取り → 答え合わせ → 登録) ======== -->
   <div class="screen" id="scrImport">
+    <div id="draftBox" style="display:none">
+      <div class="label">書きかけの長文 — タップで続きから</div>
+      <div id="draftList"></div>
+    </div>
+
     <div class="label">長文のタイトル(フォルダ名)</div>
     <input type="text" id="impGrp" placeholder="例: Part4 空港アナウンス">
 
     <div class="step-head">① 聞き取った英文を打ち込む</div>
     <div class="note">手持ちの音声を聞きながら書き取ってください。答え合わせをしない場合は空でもOKです。</div>
     <textarea id="dicAttempt" placeholder="attention passengers flight 402 to chicago has been delayed..."></textarea>
+    <button class="btn btn-sub" id="btnSaveDraft" style="margin-top:12px">ここまでを下書き保存(あとで別の端末で続ける)</button>
+    <div class="okbox" id="draftMsg"></div>
 
     <div class="step-head">② 正解の英文を入れて答え合わせ</div>
     <textarea id="impText" placeholder="Attention passengers. Flight 402 to Chicago has been delayed due to severe weather conditions, and we now expect to begin boarding at 3:30 p.m."></textarea>
@@ -532,7 +539,7 @@ details.keybox > div { margin-top: 10px; }
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
 
 /* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
-const APP_VERSION = "1.2.0 (2026-08-29)";
+const APP_VERSION = "1.3.0 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -586,10 +593,13 @@ const SYNC_FILE = "instantspeak.json";
 let syncCfg = store.get("is_sync", { token: "", gistId: "" });
 let dataUpdatedAt = store.get("is_updated", "");
 let pushTimer = null, syncing = false;
+// 書きかけの長文。聞き取りだけ入力して別の端末で続けられるようにする
+let drafts = store.get("is_drafts", []);
+let editingDraftId = null;
 
 function syncReady() { return !!syncCfg.token; }
 function syncPayload() {
-  return JSON.stringify({ updatedAt: dataUpdatedAt || new Date().toISOString(), deck, history }, null, 1);
+  return JSON.stringify({ updatedAt: dataUpdatedAt || new Date().toISOString(), deck, history, drafts }, null, 1);
 }
 async function gh(path, opts) {
   const res = await fetch("https://api.github.com" + path, {
@@ -639,8 +649,10 @@ function adoptCloud(data) {
     hard: !!c.hard, grp: c.grp || "", miss: missToIndices(c.en, c.miss)
   }));
   history = Array.isArray(data.history) ? data.history : [];
+  drafts = Array.isArray(data.drafts) ? data.drafts : [];
   store.set("is_deck", deck);
   store.set("is_hist", history);
+  store.set("is_drafts", drafts);
   dataUpdatedAt = data.updatedAt || new Date().toISOString();
   store.set("is_updated", dataUpdatedAt);
 }
@@ -1083,7 +1095,80 @@ $("btnImportSave").onclick = () => {
 /* ================= ① 長文を貼って区切る ================= */
 let impMode = "short";
 let transGrp = "";            // 日本語訳の流し込み対象フォルダ
+/* ---- 書きかけの長文(下書き) ---- */
+function saveDrafts() { store.set("is_drafts", drafts); touchData(); }
+function draftFromForm() {
+  return {
+    grp: $("impGrp").value.trim(),
+    attempt: $("dicAttempt").value.trim(),
+    answer: $("impText").value.trim(),
+    jp: $("jpText").value.trim(),
+    at: new Date().toISOString()
+  };
+}
+function draftLabel(d) {
+  const title = d.grp || "(タイトルなし)";
+  const done = [d.attempt && "聞き取り", d.answer && "正解", d.jp && "日本語訳"].filter(Boolean).join("・") || "空";
+  return { title, done, at: (d.at || "").slice(0, 16).replace("T", " ") };
+}
+function renderDrafts() {
+  const box = $("draftBox"), list = $("draftList");
+  box.style.display = drafts.length ? "block" : "none";
+  list.innerHTML = "";
+  drafts.forEach(d => {
+    const { title, done, at } = draftLabel(d);
+    const el = document.createElement("div");
+    el.className = "deck-item";
+    el.innerHTML = `<button class="dmove ddel" style="float:right;width:auto;padding:0 12px">削除</button>
+      <div class="djp"></div><div class="den"></div>`;
+    el.querySelector(".djp").textContent = title;
+    el.querySelector(".den").textContent = `入力済み: ${done}  ${at}`;
+    el.querySelector(".ddel").onclick = e => {
+      e.stopPropagation();
+      drafts = drafts.filter(x => x.id !== d.id);
+      if (editingDraftId === d.id) editingDraftId = null;
+      saveDrafts(); renderDrafts();
+    };
+    el.onclick = () => openDraft(d);
+    list.appendChild(el);
+  });
+}
+function openDraft(d) {
+  editingDraftId = d.id;
+  $("impGrp").value = d.grp || "";
+  $("dicAttempt").value = d.attempt || "";
+  $("impText").value = d.answer || "";
+  $("jpText").value = d.jp || "";
+  $("dicResultBox").style.display = "none";
+  $("impPreviewBox").style.display = "none";
+  dicFlags = null;
+  $("draftMsg").textContent = "続きから入力できます。答え合わせは②を入れてから行ってください。";
+  $("draftMsg").style.display = "block";
+  $("errImport").style.display = "none";
+  $("impMsg").style.display = "none";
+  window.scrollTo(0, 0);
+}
+$("btnSaveDraft").onclick = () => {
+  $("errImport").style.display = "none";
+  const d = draftFromForm();
+  if (!d.grp && !d.attempt && !d.answer && !d.jp) { impError("保存する内容がありません。タイトルか英文を入れてください。"); return; }
+  if (editingDraftId) {
+    const i = drafts.findIndex(x => x.id === editingDraftId);
+    if (i >= 0) drafts[i] = { ...d, id: editingDraftId };
+    else { editingDraftId = Date.now().toString(36); drafts.push({ ...d, id: editingDraftId }); }
+  } else {
+    editingDraftId = Date.now().toString(36);
+    drafts.push({ ...d, id: editingDraftId });
+  }
+  saveDrafts();
+  renderDrafts();
+  const el = $("draftMsg");
+  el.textContent = "下書きを保存しました。クラウド同期を設定していれば、他の端末でも続きから入力できます。";
+  el.style.display = "block";
+};
+
 function renderImport() {
+  renderDrafts();
   chipsPlain($("impModeChips"), SPLIT_MODES, it => impMode === it.id, it => { impMode = it.id; renderImport(); });
   const groups = groupNames();
   if (transGrp && !groups.includes(transGrp)) transGrp = "";
@@ -1238,7 +1323,13 @@ $("btnSaveChunks").onclick = () => {
   $("jpChunkBox").value = "";
   $("impPreviewBox").style.display = "none";
   $("dicResultBox").style.display = "none";
+  $("draftMsg").style.display = "none";
   dicFlags = null;
+  if (editingDraftId) {   // 登録まで終わった下書きは片付ける
+    drafts = drafts.filter(x => x.id !== editingDraftId);
+    editingDraftId = null;
+    saveDrafts();
+  }
   if (grp) { cfg.scope = grp; save(); transGrp = grp; }
   const el = $("impMsg");
   el.innerHTML = `${grp ? `「${grp}」に` : ""}${added}問を登録しました`
