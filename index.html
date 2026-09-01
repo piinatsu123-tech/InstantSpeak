@@ -4,20 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <title>InstantSpeak — ディクテーション&瞬間英作文</title>
 <style>
 :root {
-  --ink: #131929;
-  --ink-2: #1c2438;
-  --ink-3: #283454;
-  --lamp: #f0a868;
-  --lamp-dim: #b97f4e;
-  --paper: #f2ecdf;
-  --paper-dim: #b8b2a4;
-  --good: #7fc8a9;
-  --soso: #e8c468;
-  --bad: #e08080;
+  /* 白ベース。--ink 系=面(背景)、--paper 系=文字。
+     中間色は無彩色ではなくアクセント寄りに暖色を含ませている */
+  --ink: #ffffff;        /* ページ背景 */
+  --ink-2: #faf8f5;      /* カード面 */
+  --ink-3: #e7e1d7;      /* 罫線 */
+  --lamp: #9c530d;       /* アクセント(淡い面に載せてもAAを満たす濃さ) */
+  --lamp-dim: #8a6a45;
+  --paper: #1b1a17;      /* 本文 */
+  --paper-dim: #6a6358;  /* 補助文 */
+  --good: #1c7a55;
+  --soso: #7d5900;
+  --bad: #b3261e;
+  /* 面に敷く淡い色。テーマを変えてもここだけ直せば揃う */
+  --lamp-tint: rgba(156,83,13,.09);
+  --good-tint: rgba(28,122,85,.09);
+  --soso-tint: rgba(125,89,0,.11);
+  --bad-tint: rgba(179,38,30,.08);
   --radius: 14px;
   --jp-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   --ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
@@ -51,9 +59,9 @@ body {
 .tab {
   flex: 1; border: none; background: none; color: var(--paper-dim);
   font-family: var(--ui); font-size: .9rem; font-weight: 600;
-  padding: 12px 8px; border-radius: 999px; cursor: pointer;
+  padding: 0 8px; min-height: 44px; border-radius: 999px; cursor: pointer;
 }
-.tab.sel { background: rgba(240,168,104,.16); color: var(--lamp); }
+.tab.sel { background: var(--lamp-tint); color: var(--lamp); }
 
 /* ---------- screens ---------- */
 .screen { display: none; }
@@ -65,17 +73,25 @@ body {
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   border: 1px solid var(--ink-3); background: var(--ink-2); color: var(--paper);
-  border-radius: 999px; padding: 9px 15px; font-size: .88rem; cursor: pointer;
+  border-radius: 999px; padding: 0 16px; font-size: .88rem; cursor: pointer;
   transition: border-color .15s, background .15s; font-family: var(--ui);
+  min-height: 44px;   /* iOS推奨のタップ領域 */
+  display: inline-flex; align-items: center;
 }
-.chip.sel { border-color: var(--lamp); background: rgba(240,168,104,.13); color: var(--lamp); }
+.chip.sel { border-color: var(--lamp); background: var(--lamp-tint); color: var(--lamp); }
 .chip small { font-size: .68rem; opacity: .75; margin-left: 3px; }
 input[type=text], input[type=password], textarea {
   width: 100%; background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
   color: var(--paper); padding: 13px 14px; font-size: 16px; font-family: var(--ui);
 }
 textarea { min-height: 110px; resize: vertical; }
-input:focus, textarea:focus { outline: none; border-color: var(--lamp-dim); }
+input:focus, textarea:focus { outline: none; border-color: var(--lamp); box-shadow: 0 0 0 3px var(--lamp-tint); }
+/* キーボード操作時に「いまどこにいるか」が分かるようにする */
+button:focus-visible, a:focus-visible, summary:focus-visible,
+input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 2px;
+}
 .btn {
   display: block; width: 100%; border: none; border-radius: var(--radius);
   padding: 16px; font-size: 1.02rem; font-weight: 600; cursor: pointer;
@@ -86,6 +102,8 @@ input:focus, textarea:focus { outline: none; border-color: var(--lamp-dim); }
 .btn-sub { background: var(--ink-2); color: var(--paper); border: 1px solid var(--ink-3); margin-top: 10px; }
 .btn:disabled { opacity: .45; pointer-events: none; }
 .note { font-size: .75rem; color: var(--paper-dim); margin-top: 8px; line-height: 1.6; }
+/* 件数や行数など、その場で数字が変わる表示は桁を揃える */
+.deck-count, .chunk-count, .dic-score, .lastscore, .head .streak { font-variant-numeric: tabular-nums; }
 .lastscore { margin-top: 22px; padding: 14px 16px; background: var(--ink-2); border-radius: var(--radius); font-size: .85rem; color: var(--paper-dim); display: none; }
 .lastscore b { color: var(--good); font-size: 1.05rem; }
 details.keybox { margin-top: 24px; }
@@ -137,9 +155,9 @@ details.keybox > div { margin-top: 10px; }
   transition: transform .08s;
 }
 .grade button:active { transform: scale(.96); }
-.grade .g-good { background: rgba(127,200,169,.16); color: var(--good); border: 1px solid var(--good); }
-.grade .g-soso { background: rgba(232,196,104,.13); color: var(--soso); border: 1px solid var(--soso); }
-.grade .g-bad  { background: rgba(224,128,128,.13); color: var(--bad); border: 1px solid var(--bad); }
+.grade .g-good { background: var(--good-tint); color: var(--good); border: 1px solid var(--good); }
+.grade .g-soso { background: var(--soso-tint); color: var(--soso); border: 1px solid var(--soso); }
+.grade .g-bad  { background: var(--bad-tint); color: var(--bad); border: 1px solid var(--bad); }
 .grade button small { display: block; font-size: .68rem; font-weight: 500; margin-top: 3px; opacity: .8; }
 
 /* ---------- results ---------- */
@@ -165,8 +183,8 @@ details.keybox > div { margin-top: 10px; }
 .loading .dots { font-family: var(--jp-serif); font-size: 1.05rem; letter-spacing: .1em; }
 .loading .dots::after { content: "…"; animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
-.errbox { background: rgba(224,128,128,.12); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 16px; display: none; line-height: 1.6; }
-.okbox { background: rgba(127,200,169,.12); border: 1px solid var(--good); color: var(--good); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 12px; display: none; line-height: 1.6; }
+.errbox { background: var(--bad-tint); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 16px; display: none; line-height: 1.6; }
+.okbox { background: var(--good-tint); border: 1px solid var(--good); color: var(--good); border-radius: var(--radius); padding: 13px 14px; font-size: .85rem; margin-top: 12px; display: none; line-height: 1.6; }
 
 /* ---------- drive mode ---------- */
 .drive-card {
@@ -178,7 +196,7 @@ details.keybox > div { margin-top: 10px; }
 .drive-card .den-big { font-size: 1.35rem; font-weight: 700; color: var(--lamp); line-height: 1.5; min-height: 2em; }
 .drive-card .dphase { font-size: .8rem; color: var(--paper-dim); letter-spacing: .1em; }
 .btn-huge { padding: 22px; font-size: 1.15rem; border-radius: 18px; }
-.btn-drive { background: rgba(127,200,169,.16); color: var(--good); border: 1px solid var(--good); }
+.btn-drive { background: var(--good-tint); color: var(--good); border: 1px solid var(--good); }
 .dgrade-mark { font-size: 1rem; min-width: 2em; text-align: center; display: inline-block; }
 .log-item {
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: var(--radius);
@@ -198,7 +216,7 @@ details.keybox > div { margin-top: 10px; }
 .dic-diff .w-ok { color: var(--paper); }
 /* 書き取れなかった語。答え合わせ欄だけでなく登録後の英文表示でも使う */
 .w-miss { color: var(--bad); border-bottom: 2px solid var(--bad); font-weight: 700; }
-.chip.miss-chip { color: var(--bad); border-color: var(--bad); background: rgba(224,128,128,.12); }
+.chip.miss-chip { color: var(--bad); border-color: var(--bad); background: var(--bad-tint); }
 .dic-diff .w-extra { color: var(--paper-dim); text-decoration: line-through; opacity: .7; }
 .dic-score { font-size: .85rem; margin-top: 10px; color: var(--paper-dim); }
 .dic-score b { font-size: 1.35rem; color: var(--lamp); font-variant-numeric: tabular-nums; }
@@ -208,7 +226,7 @@ details.keybox > div { margin-top: 10px; }
 /* 1行=1問のテキストエリア。iOSは16px未満だとフォーカス時に自動ズームして
    画面が揺れるため、必ず16px以上にする */
 #chunkBox, #jpChunkBox { min-height: 150px; font-size: 16px; line-height: 1.9; }
-.step-btn { background: rgba(240,168,104,.13); color: var(--lamp); border: 1px solid var(--lamp-dim); }
+.step-btn { background: var(--lamp-tint); color: var(--lamp); border: 1px solid var(--lamp-dim); }
 .chunk-count { font-size: .78rem; margin-top: 10px; }
 .chunk-count.bad { color: var(--bad); }
 .chunk-count.ok { color: var(--good); }
@@ -237,12 +255,12 @@ details.keybox > div { margin-top: 10px; }
 .deck-item .djp { font-family: var(--jp-serif); font-size: .92rem; margin-bottom: 4px; }
 .deck-item .den { font-size: .88rem; color: var(--lamp); }
 .deck-item .dtag { float: right; font-size: .68rem; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 6px; padding: 2px 6px; }
-.deck-item .dcheck { float: right; margin-left: 10px; width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: 1rem; cursor: pointer; }
-.deck-item .dcheck.on { border-color: var(--soso); color: var(--soso); background: rgba(232,196,104,.13); }
+.deck-item .dcheck { float: right; margin-left: 10px; width: 44px; height: 44px; flex-shrink: 0; border-radius: 999px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: 1rem; cursor: pointer; }
+.deck-item .dcheck.on { border-color: var(--soso); color: var(--soso); background: var(--soso-tint); }
 .deck-item .dnum { color: var(--lamp-dim); font-family: var(--ui); font-size: .8rem; margin-right: 6px; font-variant-numeric: tabular-nums; }
 .deck-item .dgrp { display: inline-block; margin-top: 8px; font-size: .68rem; color: var(--paper-dim); border: 1px solid var(--ink-3); border-radius: 6px; padding: 2px 7px; }
 .deck-item .dfoot { display: flex; gap: 6px; margin-top: 9px; }
-.deck-item .dmove { width: 44px; height: 30px; border-radius: 8px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: .9rem; cursor: pointer; }
+.deck-item .dmove { width: 52px; height: 44px; border-radius: 8px; border: 1px solid var(--ink-3); background: none; color: var(--paper-dim); font-size: .9rem; cursor: pointer; }
 .deck-item .dmove:disabled { opacity: .3; }
 .deck-count { font-size: .75rem; color: var(--paper-dim); margin: 6px 2px 10px; }
 .weak-item .wedit {
@@ -250,7 +268,7 @@ details.keybox > div { margin-top: 10px; }
   border-radius: 8px; padding: 4px 10px; font-size: .8rem; cursor: pointer; margin-left: 8px;
 }
 .modal-bg {
-  display: none; position: fixed; inset: 0; background: rgba(10,14,25,.78);
+  display: none; position: fixed; inset: 0; background: rgba(27,26,23,.55);
   z-index: 50; padding: 24px 18px; overflow-y: auto;
 }
 .modal-bg.on { display: block; }
@@ -260,7 +278,7 @@ details.keybox > div { margin-top: 10px; }
   animation: fadein .2s ease;
 }
 .modal .label:first-child { margin-top: 0; }
-.modal .btn-danger { background: rgba(224,128,128,.13); color: var(--bad); border: 1px solid var(--bad); }
+.modal .btn-danger { background: var(--bad-tint); color: var(--bad); border: 1px solid var(--bad); }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
@@ -274,8 +292,8 @@ details.keybox > div { margin-top: 10px; }
   </div>
 
   <div class="tabs" id="tabBar">
-    <button class="tab" data-tab="scrSetup">🚗 練習</button>
-    <button class="tab" data-tab="scrPrep">📝 問題を準備</button>
+    <button class="tab" data-tab="scrSetup">練習</button>
+    <button class="tab" data-tab="scrPrep">問題を準備</button>
   </div>
 
   <!-- ======== 練習タブ ======== -->
@@ -285,7 +303,7 @@ details.keybox > div { margin-top: 10px; }
     <div class="label" id="scopeLabel" style="display:none">出題範囲</div>
     <div class="chips" id="scopeChips"></div>
 
-    <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:24px">🚗 ドライブモード(音声のみ)</button>
+    <button class="btn btn-huge btn-drive" id="btnDrive" style="margin-top:24px">ドライブモード(音声のみ)</button>
 
     <div class="label" id="timerLabel" style="display:none">考える時間(画面で解くとき)</div>
     <div class="chips" id="timerChips"></div>
@@ -298,7 +316,7 @@ details.keybox > div { margin-top: 10px; }
   <!-- ======== 準備タブ ======== -->
   <div class="screen" id="scrPrep">
     <div class="deck-count" id="prepCount"></div>
-    <button class="btn btn-main step-btn" id="btnImportScreen">✍️ 書き取り → 答え合わせ → 登録</button>
+    <button class="btn btn-main step-btn" id="btnImportScreen">書き取り → 答え合わせ → 登録</button>
     <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
     <div class="note" id="jpWarn" style="display:none"></div>
   </div>
@@ -314,7 +332,7 @@ details.keybox > div { margin-top: 10px; }
 
     <div class="step-head">② 正解の英文を入れて答え合わせ</div>
     <textarea id="impText" placeholder="Attention passengers. Flight 402 to Chicago has been delayed due to severe weather conditions, and we now expect to begin boarding at 3:30 p.m."></textarea>
-    <button class="btn btn-sub" id="btnCheckDic" style="margin-top:12px">🔍 答え合わせする</button>
+    <button class="btn btn-sub" id="btnCheckDic" style="margin-top:12px">答え合わせする</button>
     <div id="dicResultBox" style="display:none">
       <div class="dic-diff" id="dicDiff"></div>
       <div class="dic-legend">赤い下線 = 書き取れなかった語 / 取り消し線 = 余分に書いた語</div>
@@ -329,7 +347,7 @@ details.keybox > div { margin-top: 10px; }
     <div class="step-head">④ 文章を区切る</div>
     <div class="label">英文の区切り方</div>
     <div class="chips" id="impModeChips"></div>
-    <button class="btn btn-sub" id="btnSplit" style="margin-top:12px">✂ 区切る</button>
+    <button class="btn btn-sub" id="btnSplit" style="margin-top:12px">区切る</button>
 
     <div id="impPreviewBox" style="display:none">
       <div class="label">英文(1行=1問) — 改行で分ける・つなげて結合</div>
@@ -347,7 +365,7 @@ details.keybox > div { margin-top: 10px; }
         <div class="note">保存した長文を選び、AIに訳してもらった日本語を流し込みます。1行に1つ、問題と同じ順番で並べてください(AIの返答がJSONでもそのまま貼れます)。</div>
         <div class="label">対象の長文</div>
         <div class="chips" id="transGrpChips"></div>
-        <button class="btn btn-sub" id="btnCopyTransPrompt" style="margin-top:10px">📋 翻訳の依頼文をコピー</button>
+        <button class="btn btn-sub" id="btnCopyTransPrompt" style="margin-top:10px">翻訳の依頼文をコピー</button>
         <div class="label">日本語訳を貼り付け</div>
         <textarea id="transText" placeholder="ご搭乗のみなさまにお知らせします。&#10;シカゴ行き402便は悪天候のため遅れております。&#10;..."></textarea>
         <button class="btn btn-sub" id="btnApplyTrans" style="margin-top:10px">日本語訳を流し込む</button>
@@ -420,13 +438,13 @@ details.keybox > div { margin-top: 10px; }
     <div class="chips" id="driveEnVoiceChips"></div>
     <div class="label">英語の再生スピード</div>
     <div class="chips" id="driveEnRateChips"></div>
-    <button class="btn btn-sub" id="btnVoicePreview" style="margin-top:0">🔊 試聴する</button>
+    <button class="btn btn-sub" id="btnVoicePreview" style="margin-top:0">試聴する</button>
     <div class="note" id="voiceHint" style="display:none">より流暢な声を追加できます: iPhoneの 設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 で「Ava(プレミアム)」などをダウンロードすると、ここに「プレミアム」タグ付きで表示され、選べるようになります。(反映されない場合はSafariを一度終了して開き直してください)</div>
     <div class="label">声で評価をつける</div>
     <div class="chips" id="driveVoiceChips"></div>
     <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
     <div class="note">運転前にスタートしてください。止めるまでエンドレスに流れます(長文フォルダを選ぶと順番どおり、全フォルダならシャッフル)。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
-    <button class="btn btn-main btn-huge" id="btnDriveStart">▶ 再生開始</button>
+    <button class="btn btn-main btn-huge" id="btnDriveStart">再生開始</button>
     <button class="btn btn-sub" id="btnDriveBack">ホームへ</button>
     <div class="errbox" id="errDrive"></div>
   </div>
@@ -438,8 +456,8 @@ details.keybox > div { margin-top: 10px; }
       <div class="djp-big" id="dJp"></div>
       <div class="den-big" id="dEn"></div>
     </div>
-    <button class="btn btn-huge btn-sub" id="btnDrivePause" style="margin-top:16px">⏸ 一時停止</button>
-    <button class="btn btn-huge btn-sub" id="btnDriveStop">■ 終了</button>
+    <button class="btn btn-huge btn-sub" id="btnDrivePause" style="margin-top:16px">一時停止</button>
+    <button class="btn btn-huge btn-sub" id="btnDriveStop">終了</button>
   </div>
 
   <!-- ======== DRIVE LOG (降車後のまとめ評価) ======== -->
@@ -464,7 +482,7 @@ details.keybox > div { margin-top: 10px; }
         <input type="text" id="pasteGrp" placeholder="例: Part7 第3問 求人メール">
         <div class="label">JSON</div>
         <textarea id="pasteJson" placeholder='{"sentences":[{"jp":"日本語","en":"English","note":"メモ"}]}'></textarea>
-        <button class="btn btn-sub" id="btnImportSave" style="margin-top:10px">📥 まとめて追加する</button>
+        <button class="btn btn-sub" id="btnImportSave" style="margin-top:10px">まとめて追加する</button>
         <div class="okbox" id="importMsg"></div>
         <div class="note">フォルダ名を付けると、その長文の文が<b>貼り付けた順番のまま</b>1つのフォルダにまとまり、ホームの「出題範囲」から順番どおりに練習できます。ChatGPTやClaudeに「この長文を瞬間英作文カードに分けて。{"sentences":[{"jp":"日本語","en":"English","note":"メモ"}]} の形式のJSONだけで返して」と頼み、返ってきたJSONを貼り付けるのが簡単です。同じフォルダ内の同じ日本語文は重複追加されません。</div>
       </div>
@@ -498,7 +516,7 @@ details.keybox > div { margin-top: 10px; }
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
 
 /* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
-const APP_VERSION = "1.0.0 (2026-08-29)";
+const APP_VERSION = "1.1.0 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -782,7 +800,7 @@ function renderSetup() {
   $("scopeLabel").style.display = hasGroups ? "block" : "none";
   if (hasGroups) {
     const items = [{ id: "", label: `すべて (${deck.length})` }]
-      .concat(groups.map(g => ({ id: g, label: `📁 ${g} (${cardsInGroup(g).length})` })));
+      .concat(groups.map(g => ({ id: g, label: `${g} (${cardsInGroup(g).length})` })));
     chips($("scopeChips"), items, it => cfg.scope === it.id, it => { cfg.scope = it.id; save(); });
   } else $("scopeChips").innerHTML = "";
 
@@ -792,9 +810,9 @@ function renderSetup() {
   const total = deck.length, hc = ready.filter(c => c.hard).length;
   $("homeCount").textContent = total
     ? (cfg.scope
-        ? `📁 ${cfg.scope} — ${pool.length}問(順番どおり)${hc ? ` ・ チェック中 ${hc}問` : ""}${noJp ? ` ・ 和訳なし ${noJp}問` : ""}`
+        ? `${cfg.scope} — ${pool.length}問(順番どおり)${hc ? ` ・ チェック中 ${hc}問` : ""}${noJp ? ` ・ 和訳なし ${noJp}問` : ""}`
         : `登録 ${total}問${hc ? ` ・ チェック中 ${hc}問` : ""}${noJp ? ` ・ 和訳なし ${noJp}問` : ""}`)
-    : "まだ問題がありません。「📝 問題を準備」タブから登録してください。";
+    : "まだ問題がありません。「問題を準備」タブから登録してください。";
   $("btnDrive").disabled = total === 0;
   $("hardCount").textContent = hc;
   // 画面で解くのはチェック問題の復習用。無いときは行ごと隠してすっきりさせる
@@ -913,7 +931,7 @@ function saveImported(sentences, grp) {
   return { added, skipped };
 }
 function importResultMsg(added, skipped, grp) {
-  const where = grp ? `📁 ${grp} に` : "";
+  const where = grp ? `「${grp}」に` : "";
   if (added) return `${where}${added}問を追加しました` + (skipped ? `(重複${skipped}問はスキップ)` : "");
   return `新しく追加できる問題はありませんでした(${skipped}問すべて重複)`;
 }
@@ -945,7 +963,7 @@ function renderImport() {
   if (!transGrp && groups.length) transGrp = groups[groups.length - 1];
   const items = groups.map(g => {
     const miss = cardsInGroup(g).filter(c => !c.jp).length;
-    return { id: g, label: `📁 ${g}`, tag: miss ? `和訳なし${miss}` : "済" };
+    return { id: g, label: `${g}`, tag: miss ? `和訳なし${miss}` : "済" };
   });
   if (items.length) chipsPlain($("transGrpChips"), items, it => transGrp === it.id, it => { transGrp = it.id; renderImport(); });
   else $("transGrpChips").innerHTML = '<span class="note" style="font-size:.8rem">まだ長文がありません</span>';
@@ -1096,10 +1114,10 @@ $("btnSaveChunks").onclick = () => {
   dicFlags = null;
   if (grp) { cfg.scope = grp; save(); transGrp = grp; }
   const el = $("impMsg");
-  el.innerHTML = `${grp ? `📁 ${grp} に` : ""}${added}問を登録しました`
+  el.innerHTML = `${grp ? `「${grp}」に` : ""}${added}問を登録しました`
     + (skipped ? `(重複${skipped}問はスキップ)` : "")
     + (hardN ? `<br>書き取れなかった語を含む ${hardN}問に「✓チェック」を付けました。` : "")
-    + (noJpN ? `<br>${noJpN}問は日本語なしです。下の「日本語訳をあとから流し込む」で追加できます。` : "<br>「🚗 練習」タブのドライブモードで、この長文を順番に流せます。");
+    + (noJpN ? `<br>${noJpN}問は日本語なしです。下の「日本語訳をあとから流し込む」で追加できます。` : "<br>「練習」タブのドライブモードで、この長文を順番に流せます。");
   el.style.display = "block";
   renderImport();
 };
@@ -1120,7 +1138,7 @@ $("btnCopyTransPrompt").onclick = async () => {
   try {
     await navigator.clipboard.writeText(buildTransPrompt(transGrp));
     $("btnCopyTransPrompt").textContent = "コピーしました ✓ AIに貼ってください";
-    setTimeout(() => $("btnCopyTransPrompt").textContent = "📋 翻訳の依頼文をコピー", 2500);
+    setTimeout(() => $("btnCopyTransPrompt").textContent = "翻訳の依頼文をコピー", 2500);
   } catch {
     $("errImport").textContent = "コピーに失敗しました。手動でコピーしてください";
     $("errImport").style.display = "block";
@@ -1243,7 +1261,7 @@ function startTimer() {
 function reveal() {
   clearInterval(timerId);
   fillEnWithMiss($("aEn"), drill[idx]);
-  $("aTip").textContent = drill[idx].note ? "💡 " + drill[idx].note : "";
+  $("aTip").textContent = drill[idx].note ? drill[idx].note : "";
   $("ansBox").classList.add("on");
   $("btnReveal").style.display = "none";
   $("speakHint").textContent = "模範解答を声に出して2回リピート";
@@ -1287,7 +1305,7 @@ function finish() {
     list.innerHTML = "";
     const misses = drill.map((q, i) => ({ card: q, g: results[i] })).filter(x => x.g === "hard");
     if (!misses.length) {
-      list.innerHTML = `<div class="empty-weak">全部スッと言えた 🎉</div>`;
+      list.innerHTML = `<div class="empty-weak">全部スッと言えた</div>`;
       $("btnCsv").style.display = $("btnCsvDl").style.display = $("btnRetry").style.display = "none";
       return;
     }
@@ -1296,7 +1314,7 @@ function finish() {
       const d = document.createElement("div");
       d.className = "weak-item";
       d.innerHTML = `<span class="mark">△</span>
-        <button class="wedit">✎</button>
+        <button class="wedit">編集</button>
         <div class="wjp"></div><div class="wen"></div>`;
       d.querySelector(".wjp").textContent = m.card.jp;
       fillEnWithMiss(d.querySelector(".wen"), m.card);
@@ -1532,7 +1550,7 @@ function renderDriveSetup() {
   $("driveGrpLabel").style.display = groups.length ? "block" : "none";
   if (groups.length) {
     const items = [{ id: "", label: "全フォルダ" }]
-      .concat(groups.map(g => ({ id: g, label: `📁 ${g}`, tag: "順番" })));
+      .concat(groups.map(g => ({ id: g, label: `${g}`, tag: "順番" })));
     driveChips($("driveGrpChips"), items,
       it => driveCfg.grp === it.id,
       it => { driveCfg.grp = it.id; store.set("is_drive", driveCfg); });
@@ -1691,7 +1709,7 @@ $("btnDrivePause").onclick = () => {
     if (drivePaused) { if (IS_IOS) speechSynthesis.cancel(); else speechSynthesis.pause(); }
     else if (!IS_IOS) speechSynthesis.resume();
   } catch {}
-  $("btnDrivePause").textContent = drivePaused ? "▶ 再開" : "⏸ 一時停止";
+  $("btnDrivePause").textContent = drivePaused ? "再開" : "一時停止";
 };
 $("btnDriveStop").onclick = stopDrive;
 function stopDrive() {
@@ -1700,7 +1718,7 @@ function stopDrive() {
   speechSynthesis.cancel();
   clearInterval(ssKeepAlive);
   if (wakeLockRef) { try { wakeLockRef.release(); } catch {} wakeLockRef = null; }
-  $("btnDrivePause").textContent = "⏸ 一時停止";
+  $("btnDrivePause").textContent = "一時停止";
   if (driveLog.length) { renderDriveLog(); show("scrDriveLog"); }
   else { renderSetup(); show("scrSetup"); }
 }
@@ -1756,7 +1774,7 @@ function renderDeckFilterChips() {
   el.innerHTML = "";
   const groups = groupNames();
   const items = [{ id: "all", label: `すべて (${deck.length})` }, { id: "hard", label: `チェックのみ (${hardCount()})` }];
-  groups.forEach(g => items.push({ id: "g:" + g, label: `📁 ${g} (${cardsInGroup(g).length})` }));
+  groups.forEach(g => items.push({ id: "g:" + g, label: `${g} (${cardsInGroup(g).length})` }));
   const un = cardsInGroup("").length;
   if (groups.length && un) items.push({ id: "g:", label: `未分類 (${un})` });
   items.forEach(it => {
@@ -1821,7 +1839,7 @@ function renderDeck() {
       // 全件表示中: どのフォルダの文か分かるようタグを出す
       const tag = document.createElement("span");
       tag.className = "dgrp";
-      tag.textContent = "📁 " + card.grp;
+      tag.textContent = card.grp;
       d.appendChild(tag);
     }
     d.onclick = () => openEditor({ type: "card", card }, card);
