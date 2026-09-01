@@ -428,8 +428,7 @@ details.keybox > div { margin-top: 10px; }
 
   <!-- ======== DRIVE SETUP ======== -->
   <div class="screen" id="scrDriveSetup">
-    <div class="label" id="driveGrpLabel" style="display:none">長文フォルダ</div>
-    <div class="chips" id="driveGrpChips"></div>
+    <div class="deck-count" id="driveScope"></div>
     <div class="label">音声で流す問題</div>
     <div class="chips" id="driveSrcChips"></div>
     <div class="label">考える時間(日本語のあと)</div>
@@ -443,7 +442,7 @@ details.keybox > div { margin-top: 10px; }
     <div class="label">声で評価をつける</div>
     <div class="chips" id="driveVoiceChips"></div>
     <div class="note">ONにすると答えの後「ピピッ」と鳴ってから3秒間、「できた」「むずかしい」「できなかった」の声で評価を記録します(要マイク許可・電波必要)。聞き取れない時は自動で次へ進みます。終了後にまとめて付け直しもできます。</div>
-    <div class="note">運転前にスタートしてください。止めるまでエンドレスに流れます(長文フォルダを選ぶと順番どおり、全フォルダならシャッフル)。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
+    <div class="note">運転前にスタートしてください。止めるまでエンドレスに流れます。流す範囲は「練習」タブの出題範囲で切り替えます。画面は自動でスリープしないようにします(Bluetooth/CarPlay経由の音声推奨)。</div>
     <button class="btn btn-main btn-huge" id="btnDriveStart">再生開始</button>
     <button class="btn btn-sub" id="btnDriveBack">ホームへ</button>
     <div class="errbox" id="errDrive"></div>
@@ -516,7 +515,7 @@ details.keybox > div { margin-top: 10px; }
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
 
 /* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
-const APP_VERSION = "1.1.0 (2026-08-29)";
+const APP_VERSION = "1.1.1 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -1371,7 +1370,6 @@ if (!driveCfg.enVoiceURI) driveCfg.enVoiceURI = "auto"; // 旧バージョンの
 if (!driveCfg.enRate) driveCfg.enRate = 0.95;
 if (driveCfg.src === "scene") driveCfg.src = "all";   // 旧シーン制からの移行
 if (driveCfg.src === "weak") driveCfg.src = "hard";
-if (typeof driveCfg.grp !== "string") driveCfg.grp = "";  // "" = フォルダ問わず全部
 let driveOn = false, drivePaused = false, driveQueue = [], driveIdx = 0, driveOrdered = false;
 let driveLog = []; // 今回流れた文 {jp,en,g:null|"good"|"soso"|"bad"}
 let wakeLockRef = null, ssKeepAlive = null, voicesCache = [];
@@ -1544,17 +1542,13 @@ function driveChips(el, items, getSel, onSel) {
   });
 }
 function renderDriveSetup() {
-  // 長文フォルダの選択(フォルダが無ければ行ごと隠す)
-  const groups = groupNames();
-  if (driveCfg.grp && !groups.includes(driveCfg.grp)) { driveCfg.grp = ""; store.set("is_drive", driveCfg); }
-  $("driveGrpLabel").style.display = groups.length ? "block" : "none";
-  if (groups.length) {
-    const items = [{ id: "", label: "全フォルダ" }]
-      .concat(groups.map(g => ({ id: g, label: `${g}`, tag: "順番" })));
-    driveChips($("driveGrpChips"), items,
-      it => driveCfg.grp === it.id,
-      it => { driveCfg.grp = it.id; store.set("is_drive", driveCfg); });
-  } else $("driveGrpChips").innerHTML = "";
+  // 流す範囲は練習タブの「出題範囲」をそのまま使う(選び直さなくてよいように)
+  const base = drillReady(scopeCards());
+  const n = (driveCfg.src === "hard" ? base.filter(c => c.hard) : base).length;
+  const only = driveCfg.src === "hard" ? "チェックした問題のうち" : "";
+  $("driveScope").textContent = cfg.scope
+    ? `${cfg.scope} の${only} ${n}問を順番どおりに流します`
+    : `すべての${only} ${n}問をシャッフルして流します`;
 
   driveChips($("driveSrcChips"), DRIVE_SRC,
     it => driveCfg.src === it.id,
@@ -1617,8 +1611,8 @@ $("btnDriveBack").onclick = () => { renderSetup(); show("scrSetup"); };
 
 $("btnDriveStart").onclick = async () => {
   $("errDrive").style.display = "none";
-  // ドライブは日本語→英語の読み上げなので和訳のあるカードだけ
-  let pool = drillReady(driveCfg.grp ? cardsInGroup(driveCfg.grp) : deck.slice());
+  // 範囲は練習タブの「出題範囲」に従う。日本語→英語の読み上げなので和訳のあるカードだけ
+  let pool = drillReady(scopeCards());
   if (driveCfg.src === "hard") pool = pool.filter(c => c.hard);
   if (!pool.length) {
     $("errDrive").textContent = driveCfg.src === "hard"
@@ -1630,7 +1624,7 @@ $("btnDriveStart").onclick = async () => {
   // カード参照を持たせる(同じ日本語文が別フォルダにもあり得るため、
   //  降車後の評価を正しいカードへ返せるようにする)
   driveQueue = pool.map(c => ({ jp: c.jp, en: c.en, card: c }));
-  driveOrdered = !!driveCfg.grp;          // フォルダ指定時は長文の順番どおりに流す
+  driveOrdered = !!cfg.scope;             // 長文フォルダ指定時は順番どおりに流す
   if (!driveOrdered) shuffle(driveQueue);
   driveIdx = 0;
   driveLog = [];
