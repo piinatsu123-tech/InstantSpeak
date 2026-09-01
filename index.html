@@ -319,6 +319,23 @@ details.keybox > div { margin-top: 10px; }
     <button class="btn btn-main step-btn" id="btnImportScreen">書き取り → 答え合わせ → 登録</button>
     <button class="btn btn-sub" id="btnDeck">問題を追加・編集する</button>
     <div class="note" id="jpWarn" style="display:none"></div>
+
+    <details class="keybox" id="syncBox">
+      <summary>クラウド同期(GitHub)</summary>
+      <div>
+        <div class="deck-count" id="syncState"></div>
+        <div class="label">アクセストークン</div>
+        <input type="password" id="syncToken" placeholder="ghp_... / github_pat_...">
+        <div class="note">GitHubの Settings → Developer settings → Personal access tokens で、<b>Gists の読み書き権限だけ</b>を付けたトークンを作って貼ってください。トークンはこの端末にのみ保存され、送信先は api.github.com だけです。</div>
+        <div class="label">保存先ID(2台目以降は1台目のIDを貼る)</div>
+        <input type="text" id="syncGist" placeholder="空のまま同期すると新しく作成します">
+        <button class="btn btn-sub" id="btnSyncNow">今すぐ同期する</button>
+        <button class="btn btn-sub" id="btnSyncPull">クラウドの内容で置き換える</button>
+        <div class="okbox" id="syncMsg"></div>
+        <div class="errbox" id="syncErr"></div>
+        <div class="note">問題集と学習履歴を同期します。考える時間や声の設定は端末ごとの設定なので同期しません。編集すると数秒後に自動で保存され、アプリを開いたときにクラウド側が新しければ自動で取り込みます。</div>
+      </div>
+    </details>
   </div>
 
   <!-- ======== IMPORT (書き取り → 答え合わせ → 登録) ======== -->
@@ -515,7 +532,7 @@ details.keybox > div { margin-top: 10px; }
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
 
 /* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
-const APP_VERSION = "1.1.1 (2026-08-29)";
+const APP_VERSION = "1.2.0 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -554,7 +571,118 @@ function migrateDeck() {
   store.set("is_deck", out);
   return out;
 }
-function saveDeck() { store.set("is_deck", deck); }
+function saveDeck() { store.set("is_deck", deck); touchData(); }
+function touchData() {
+  // データが変わった時刻を残し、少し待ってからクラウドへ保存する
+  dataUpdatedAt = new Date().toISOString();
+  store.set("is_updated", dataUpdatedAt);
+  schedulePush();
+}
+
+/* ================= クラウド同期(GitHub Gist) =================
+   同期するのは問題集と学習履歴だけ。考える時間や声の設定は端末ごとに持つ。
+   突き合わせは更新時刻で行い、新しい方を採用する(1件ずつの併合はしない) */
+const SYNC_FILE = "instantspeak.json";
+let syncCfg = store.get("is_sync", { token: "", gistId: "" });
+let dataUpdatedAt = store.get("is_updated", "");
+let pushTimer = null, syncing = false;
+
+function syncReady() { return !!syncCfg.token; }
+function syncPayload() {
+  return JSON.stringify({ updatedAt: dataUpdatedAt || new Date().toISOString(), deck, history }, null, 1);
+}
+async function gh(path, opts) {
+  const res = await fetch("https://api.github.com" + path, {
+    ...opts,
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": "Bearer " + syncCfg.token,
+      "Content-Type": "application/json",
+      ...(opts && opts.headers)
+    }
+  });
+  if (!res.ok) {
+    const detail = res.status === 401 ? "トークンが正しくありません。作り直して貼り直してください。"
+      : res.status === 403 ? "トークンにGistの権限がありません。権限を付け直してください。"
+      : res.status === 404 ? "保存先IDが見つかりません。IDを確認するか、空にして新規作成してください。"
+      : "GitHubから " + res.status + " が返りました。";
+    throw new Error(detail);
+  }
+  return res.json();
+}
+async function pushToCloud() {
+  const files = { [SYNC_FILE]: { content: syncPayload() } };
+  if (syncCfg.gistId) {
+    await gh("/gists/" + syncCfg.gistId, { method: "PATCH", body: JSON.stringify({ files }) });
+  } else {
+    const made = await gh("/gists", {
+      method: "POST",
+      body: JSON.stringify({ description: "InstantSpeak データ", public: false, files })
+    });
+    syncCfg.gistId = made.id;
+    store.set("is_sync", syncCfg);
+  }
+}
+async function fetchCloud() {
+  if (!syncCfg.gistId) return null;
+  const g = await gh("/gists/" + syncCfg.gistId, { method: "GET" });
+  const f = g.files && g.files[SYNC_FILE];
+  if (!f) return null;
+  const text = f.truncated && f.raw_url ? await (await fetch(f.raw_url)).text() : f.content;
+  const data = JSON.parse(text);
+  if (!Array.isArray(data.deck)) throw new Error("保存されている内容を読み取れませんでした。");
+  return data;
+}
+function adoptCloud(data) {
+  deck = data.deck.map(c => ({
+    jp: c.jp || "", en: c.en, note: c.note || "",
+    hard: !!c.hard, grp: c.grp || "", miss: missToIndices(c.en, c.miss)
+  }));
+  history = Array.isArray(data.history) ? data.history : [];
+  store.set("is_deck", deck);
+  store.set("is_hist", history);
+  dataUpdatedAt = data.updatedAt || new Date().toISOString();
+  store.set("is_updated", dataUpdatedAt);
+}
+function schedulePush() {
+  // 保存先が決まっていないうちは自動で作らない
+  // (2台目でトークンを入れた瞬間に別の保存先ができてしまうのを防ぐ)
+  if (!syncReady() || !syncCfg.gistId) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushToCloud().then(() => renderSync("保存しました")).catch(e => renderSync("", e.message));
+  }, 4000);
+}
+async function autoSync() {
+  // 起動時: クラウドが新しければ取り込み、こちらが新しければ保存する
+  if (!syncReady() || syncing) return;
+  if (!syncCfg.gistId) { renderSync(""); return; }   // 新規作成は明示操作のときだけ
+  syncing = true;
+  renderSync("確認中…");
+  try {
+    const remote = await fetchCloud();
+    if (!remote) { await pushToCloud(); renderSync("保存しました"); }
+    else if ((remote.updatedAt || "") > (dataUpdatedAt || "")) {
+      adoptCloud(remote);
+      renderSetup(); renderDeck();
+      renderSync("クラウドから取り込みました");
+    } else if ((dataUpdatedAt || "") > (remote.updatedAt || "")) {
+      await pushToCloud(); renderSync("保存しました");
+    } else renderSync("最新です");
+  } catch (e) { renderSync("", e.message); }
+  syncing = false;
+}
+function renderSync(msg, err) {
+  const st = $("syncState");
+  st.textContent = !syncReady() ? "未設定(トークンを入れると同期します)"
+    : syncCfg.gistId ? "同期中 ・ 保存先ID " + syncCfg.gistId
+    : "2台目なら1台目の保存先IDを貼ってください。1台目なら「今すぐ同期する」で作成します";
+  $("syncGist").value = syncCfg.gistId || "";
+  $("syncMsg").style.display = msg ? "block" : "none";
+  if (msg) $("syncMsg").textContent = msg + (dataUpdatedAt ? "(データ更新 " + dataUpdatedAt.slice(11, 16) + ")" : "");
+  $("syncErr").style.display = err ? "block" : "none";
+  if (err) $("syncErr").textContent = "同期できません: " + err;
+}
 
 /* ---- フォルダ(長文単位)のヘルパー ---- */
 function groupNames() {
@@ -1287,6 +1415,7 @@ function finish() {
   const good = results.filter(r => r === "good").length;
   history.push({ date: new Date().toISOString().slice(0, 10), total: drill.length, good });
   store.set("is_hist", history);
+  touchData();
   $("rNum").textContent = good;
   $("rDen").textContent = drill.length;
 
@@ -1921,7 +2050,47 @@ $("edDelete").onclick = () => {
 };
 
 renderSetup();
+/* ---- クラウド同期の操作 ---- */
+$("syncToken").value = syncCfg.token || "";
+$("syncToken").addEventListener("change", e => {
+  syncCfg.token = e.target.value.trim();
+  store.set("is_sync", syncCfg);
+  renderSync(syncCfg.token ? "トークンを保存しました" : "");
+  if (syncCfg.token) autoSync();
+});
+$("syncGist").addEventListener("change", e => {
+  syncCfg.gistId = e.target.value.trim();
+  store.set("is_sync", syncCfg);
+  renderSync("保存先IDを設定しました");
+});
+$("btnSyncNow").onclick = async () => {
+  if (!syncReady()) { renderSync("", "先にトークンを入れてください。"); return; }
+  clearTimeout(pushTimer);
+  if (!syncCfg.gistId) {
+    // 保存先が無いときだけ、ここで新規に作る
+    renderSync("保存先を作成中…");
+    try { await pushToCloud(); renderSync("保存先を作りました。2台目にはこのIDを貼ってください"); }
+    catch (e) { renderSync("", e.message); }
+    return;
+  }
+  await autoSync();
+};
+$("btnSyncPull").onclick = async () => {
+  if (!syncReady()) { renderSync("", "先にトークンを入れてください。"); return; }
+  if (!syncCfg.gistId) { renderSync("", "保存先IDを入れてください。"); return; }
+  renderSync("取り込み中…");
+  try {
+    const remote = await fetchCloud();
+    if (!remote) { renderSync("", "クラウドにデータがありません。"); return; }
+    adoptCloud(remote);
+    renderSetup(); renderDeck();
+    renderSync("クラウドの内容で置き換えました");
+  } catch (e) { renderSync("", e.message); }
+};
+
 $("appVer").textContent = "v" + APP_VERSION;
+renderSync("");
+autoSync();
 show(deck.length ? "scrSetup" : "scrPrep");  // 問題が無い初回は準備タブから
 </script>
 </body>
