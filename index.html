@@ -539,7 +539,7 @@ details.keybox > div { margin-top: 10px; }
 /* 内蔵問題集は廃止。デッキはユーザーが取り込んだ問題のみ(is_deck) */
 
 /* 更新のたびに上げる。ヘッダーに表示され、反映されたか確認できる */
-const APP_VERSION = "1.3.0 (2026-08-29)";
+const APP_VERSION = "1.3.1 (2026-08-29)";
 
 /* ================= storage ================= */
 const store = {
@@ -747,17 +747,19 @@ function isSentenceEnd(buf) {
   if (/\d\.$/.test(buf)) return false;
   return true;
 }
+const EN_END = ".!?．！？";   // 全角で打たれた場合も文末として扱う
 function splitSentences(text) {
   const t = String(text).replace(/\s+/g, " ").trim();
   const out = [];
   let buf = "";
   for (let i = 0; i < t.length; i++) {
     buf += t[i];
-    if (t[i] === "." || t[i] === "!" || t[i] === "?") {
+    if (EN_END.includes(t[i])) {
+      const wide = "．！？".includes(t[i]);   // 全角で打つ場合は後ろに空白を置かないことが多い
       let j = i + 1;
       while (j < t.length && /["')\]”’]/.test(t[j])) { buf += t[j]; j++; }
-      while (j < t.length && (t[j] === "." || t[j] === "!" || t[j] === "?")) { buf += t[j]; j++; } // ?! や ...
-      if ((j >= t.length || t[j] === " ") && isSentenceEnd(buf)) {
+      while (j < t.length && EN_END.includes(t[j])) { buf += t[j]; j++; } // ?! や ...
+      if ((j >= t.length || t[j] === " " || wide) && isSentenceEnd(buf)) {
         out.push(buf.trim());
         buf = "";
       }
@@ -800,18 +802,46 @@ function splitPassage(text, mode) {
   sents.forEach(s => splitLong(s, 12).forEach(x => out.push(x)));
   return out;
 }
-function splitJapanese(text) {
-  // すでに改行で区切られていればその区切りを尊重。無ければ句点で区切る
-  const t = String(text).replace(/\r/g, "").replace(/[ \t　]+/g, " ").trim();
-  if (!t) return [];
-  if (t.includes("\n")) return t.split("\n").map(s => s.trim()).filter(Boolean);
+const JP_END = "。．｡！!？?";                    // 文末とみなす記号(全角ピリオドも含む)
+const JP_CLOSE = "」』）〕】》〉”’\"')]｝";      // 文末記号の後ろに続く閉じ括弧
+const JP_END_RE = new RegExp("[" + JP_END + "][" + JP_CLOSE + "]*$");
+const JP_OPEN_B = "「『（〔【《〈｛";
+const JP_CLOSE_B = "」』）〕】》〉｝";
+function splitJpSentences(line) {
+  // 句点で切る。ただし括弧の内側では切らない(「すぐ戻ります。」と言いました。を分断しない)。
+  // 文末記号の直後に続く閉じ括弧は同じ文に含める
   const out = [];
-  let buf = "";
-  for (const ch of t) {
+  let buf = "", depth = 0;
+  const s = String(line);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
     buf += ch;
-    if (ch === "。" || ch === "！" || ch === "？" || ch === "!" || ch === "?") { out.push(buf.trim()); buf = ""; }
+    if (JP_OPEN_B.includes(ch)) depth++;
+    else if (JP_CLOSE_B.includes(ch)) depth = Math.max(0, depth - 1);
+    else if (depth === 0 && JP_END.includes(ch)) {
+      while (i + 1 < s.length && JP_CLOSE.includes(s[i + 1])) { buf += s[++i]; }
+      out.push(buf.trim());
+      buf = "";
+    }
   }
   if (buf.trim()) out.push(buf.trim());
+  return out.filter(Boolean);
+}
+function splitJapanese(text) {
+  const t = String(text).replace(/\r/g, "").replace(/[ \t　]+/g, " ").trim();
+  if (!t) return [];
+  const lines = t.split("\n").map(s => s.trim()).filter(Boolean);
+  // 句点が一つも無いなら、書かれた行をそのまま1問ずつとして扱う
+  if (!new RegExp("[" + JP_END + "]").test(t)) return lines;
+  // 本やPDFからの貼り付けは折り返しで改行が入る。
+  // 文末記号で終わっていない行は次の行の続きとみなしてつなぐ
+  const joined = [];
+  lines.forEach(l => {
+    if (joined.length && !JP_END_RE.test(joined[joined.length - 1])) joined[joined.length - 1] += l;
+    else joined.push(l);
+  });
+  const out = [];
+  joined.forEach(line => splitJpSentences(line).forEach(s => out.push(s)));
   return out;
 }
 function splitJapaneseClauses(s) {
